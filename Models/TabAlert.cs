@@ -11,7 +11,7 @@ public partial class TabAlert
 
     public int IdTipologiaAlert { get; set; }
 
-    public int IdPaziente { get; set; }
+    public int IdUtente { get; set; }
 
     public string Messaggio { get; set; }
 

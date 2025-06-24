@@ -39,19 +39,11 @@
          "ObjectType": 0
       },
       {
-         "Name": "[dbo].[TabMedici]",
-         "ObjectType": 0
-      },
-      {
          "Name": "[dbo].[TabMisurazioniGlicemia]",
          "ObjectType": 0
       },
       {
          "Name": "[dbo].[TabPatologie]",
-         "ObjectType": 0
-      },
-      {
-         "Name": "[dbo].[TabPazienti]",
          "ObjectType": 0
       },
       {

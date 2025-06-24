@@ -11,7 +11,7 @@ public partial class TabProgrammazioneAssunzioni
 
     public int IdTerapia { get; set; }
 
-    public string Farmaco { get; set; }
+    public string NomeFarmacoProgrammato { get; set; }
 
     public decimal QuantitaPrevistaN { get; set; }
 

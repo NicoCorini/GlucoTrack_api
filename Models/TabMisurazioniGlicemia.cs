@@ -9,7 +9,7 @@ public partial class TabMisurazioniGlicemia
 {
     public int IdMisurazioneGlicemia { get; set; }
 
-    public int IdPaziente { get; set; }
+    public int IdUtente { get; set; }
 
     public DateTime MisuratoIl { get; set; }
 

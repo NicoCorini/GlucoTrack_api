@@ -29,13 +29,9 @@ public partial class GlucoTrackDBContext : DbContext
 
     public virtual DbSet<TabLogModifiche> TabLogModifiche { get; set; }
 
-    public virtual DbSet<TabMedici> TabMedici { get; set; }
-
     public virtual DbSet<TabMisurazioniGlicemia> TabMisurazioniGlicemia { get; set; }
 
     public virtual DbSet<TabPatologie> TabPatologie { get; set; }
-
-    public virtual DbSet<TabPazienti> TabPazienti { get; set; }
 
     public virtual DbSet<TabPazientiFattoriRischio> TabPazientiFattoriRischio { get; set; }
 
@@ -59,13 +55,13 @@ public partial class GlucoTrackDBContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseSqlServer("Data Source=127.0.0.1,1433;Initial Catalog=GlucoTrackDB;Persist Security Info=True;User ID=sa;Password=baseBase100;Encrypt=False;TrustServerCertificate=True");
+        => optionsBuilder.UseSqlServer("Data Source=127.0.0.1,1433;Initial Catalog=GlucoTrackDB;Persist Security Info=True;User ID=sa;Password=baseBase100;Encrypt=False");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<TabAlert>(entity =>
         {
-            entity.HasKey(e => e.IdAlert).HasName("PK__TabAlert__BCD48A58A89FDA6F");
+            entity.HasKey(e => e.IdAlert).HasName("PK__TabAlert__BCD48A589CCEE8F8");
 
             entity.Property(e => e.CreatoIl).HasColumnType("datetime");
             entity.Property(e => e.Messaggio)
@@ -75,7 +71,7 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<TabAlertUtentiDestinatari>(entity =>
         {
-            entity.HasKey(e => e.IdAlertUtentiDestinatari).HasName("PK__TabAlert__CE259670426A9D56");
+            entity.HasKey(e => e.IdAlertUtentiDestinatari).HasName("PK__TabAlert__CE259670CAAA9013");
 
             entity.Property(e => e.Letto).HasDefaultValue(false);
             entity.Property(e => e.LettoIl).HasColumnType("datetime");
@@ -83,9 +79,12 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<TabAssunzioniFarmaci>(entity =>
         {
-            entity.HasKey(e => e.IdAssunzioneFarmaco).HasName("PK__TabAssun__3A8E0950E787C139");
+            entity.HasKey(e => e.IdAssunzioneFarmaco).HasName("PK__TabAssun__3A8E09508166E6C7");
 
             entity.Property(e => e.AssuntoIl).HasColumnType("datetime");
+            entity.Property(e => e.NomeFarmacoAssunto)
+                .HasMaxLength(255)
+                .IsUnicode(false);
             entity.Property(e => e.Note).HasColumnType("text");
             entity.Property(e => e.QuantitaPrevistaValore).HasColumnType("numeric(8, 2)");
             entity.Property(e => e.UnitaMisura)
@@ -96,7 +95,7 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<TabComorbiditaPazienti>(entity =>
         {
-            entity.HasKey(e => e.IdComorbiditaPaziente).HasName("PK__TabComor__7F537BA4E6EB7899");
+            entity.HasKey(e => e.IdComorbiditaPaziente).HasName("PK__TabComor__7F537BA4C7D78268");
 
             entity.Property(e => e.Comorbidita)
                 .HasMaxLength(255)
@@ -105,9 +104,9 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<TabFattoriRischio>(entity =>
         {
-            entity.HasKey(e => e.IdFattoreRischio).HasName("PK__TabFatto__8B2469FE4B6094D5");
+            entity.HasKey(e => e.IdFattoreRischio).HasName("PK__TabFatto__8B2469FE1AD382B1");
 
-            entity.HasIndex(e => e.Nome, "UQ__TabFatto__7D8FE3B2A8363282").IsUnique();
+            entity.HasIndex(e => e.Nome, "UQ__TabFatto__7D8FE3B2D49825BA").IsUnique();
 
             entity.Property(e => e.Descrizione).HasColumnType("text");
             entity.Property(e => e.Nome)
@@ -118,7 +117,7 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<TabLogModifiche>(entity =>
         {
-            entity.HasKey(e => e.IdLog).HasName("PK__TabLogMo__0C54DBC6F1D11590");
+            entity.HasKey(e => e.IdLog).HasName("PK__TabLogMo__0C54DBC6DE4D2BDF");
 
             entity.Property(e => e.Azione)
                 .IsRequired()
@@ -133,25 +132,9 @@ public partial class GlucoTrackDBContext : DbContext
                 .HasColumnType("datetime");
         });
 
-        modelBuilder.Entity<TabMedici>(entity =>
-        {
-            entity.HasKey(e => e.IdMedico).HasName("PK__TabMedic__C326E6526481F8A3");
-
-            entity.HasIndex(e => e.IdUtente, "UQ__TabMedic__0816694ADE4786EB").IsUnique();
-
-            entity.Property(e => e.Cognome).HasMaxLength(50);
-            entity.Property(e => e.Nome).HasMaxLength(50);
-            entity.Property(e => e.OspedaleAffiliazione)
-                .HasMaxLength(255)
-                .IsUnicode(false);
-            entity.Property(e => e.Specializzazione)
-                .HasMaxLength(255)
-                .IsUnicode(false);
-        });
-
         modelBuilder.Entity<TabMisurazioniGlicemia>(entity =>
         {
-            entity.HasKey(e => e.IdMisurazioneGlicemia).HasName("PK__TabMisur__FFD8C2937D469BC6");
+            entity.HasKey(e => e.IdMisurazioneGlicemia).HasName("PK__TabMisur__FFD8C29304B3D111");
 
             entity.Property(e => e.MisuratoIl).HasColumnType("datetime");
             entity.Property(e => e.Note).HasColumnType("text");
@@ -159,7 +142,7 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<TabPatologie>(entity =>
         {
-            entity.HasKey(e => e.IdPatologia).HasName("PK__TabPatol__6D573A32FAE1134C");
+            entity.HasKey(e => e.IdPatologia).HasName("PK__TabPatol__6D573A32E29E0018");
 
             entity.Property(e => e.Dal).HasColumnType("datetime");
             entity.Property(e => e.Descrizione)
@@ -167,36 +150,22 @@ public partial class GlucoTrackDBContext : DbContext
                 .IsUnicode(false);
         });
 
-        modelBuilder.Entity<TabPazienti>(entity =>
-        {
-            entity.HasKey(e => e.IdPaziente).HasName("PK__TabPazie__D3554BAAC4872BC1");
-
-            entity.HasIndex(e => e.IdUtente, "UQ__TabPazie__0816694AD496F801").IsUnique();
-
-            entity.Property(e => e.Altezza).HasColumnType("numeric(5, 2)");
-            entity.Property(e => e.CodiceFiscale)
-                .HasMaxLength(16)
-                .IsUnicode(false);
-            entity.Property(e => e.Peso).HasColumnType("numeric(5, 2)");
-            entity.Property(e => e.Sesso).HasMaxLength(50);
-        });
-
         modelBuilder.Entity<TabPazientiFattoriRischio>(entity =>
         {
-            entity.HasKey(e => e.IdPazienteFattoreRischio).HasName("PK__TabPazie__17D4F54D7D64F329");
+            entity.HasKey(e => e.IdPazienteFattoreRischio).HasName("PK__TabPazie__17D4F54DBCF0D4FA");
         });
 
         modelBuilder.Entity<TabPazientiMedici>(entity =>
         {
-            entity.HasKey(e => e.IdPazienteMedico).HasName("PK__TabPazie__662F2A960D4ED1EB");
+            entity.HasKey(e => e.IdPazienteMedico).HasName("PK__TabPazie__662F2A96B2608491");
         });
 
         modelBuilder.Entity<TabProgrammazioneAssunzioni>(entity =>
         {
-            entity.HasKey(e => e.IdProgrammazione).HasName("PK__TabProgr__10031528D4596F05");
+            entity.HasKey(e => e.IdProgrammazione).HasName("PK__TabProgr__100315284CAA9F43");
 
             entity.Property(e => e.DataOraPrevista).HasColumnType("datetime");
-            entity.Property(e => e.Farmaco)
+            entity.Property(e => e.NomeFarmacoProgrammato)
                 .IsRequired()
                 .HasMaxLength(255)
                 .IsUnicode(false);
@@ -209,9 +178,9 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<TabRuoli>(entity =>
         {
-            entity.HasKey(e => e.IdRuolo).HasName("PK__TabRuoli__5F37071D497E8BB5");
+            entity.HasKey(e => e.IdRuolo).HasName("PK__TabRuoli__5F37071D42BF3AA8");
 
-            entity.HasIndex(e => e.NomeRuolo, "UQ__TabRuoli__5663F8FCA8988C21").IsUnique();
+            entity.HasIndex(e => e.NomeRuolo, "UQ__TabRuoli__5663F8FCAC05DAB1").IsUnique();
 
             entity.Property(e => e.NomeRuolo)
                 .IsRequired()
@@ -221,7 +190,7 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<TabSintomi>(entity =>
         {
-            entity.HasKey(e => e.IdSintomo).HasName("PK__TabSinto__FF5EADBFC035E555");
+            entity.HasKey(e => e.IdSintomo).HasName("PK__TabSinto__FF5EADBF645624C2");
 
             entity.Property(e => e.AvvenutoIl).HasColumnType("datetime");
             entity.Property(e => e.Descrizione)
@@ -231,7 +200,7 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<TabTerapie>(entity =>
         {
-            entity.HasKey(e => e.IdTerapia).HasName("PK__TabTerap__EC02E57C19850029");
+            entity.HasKey(e => e.IdTerapia).HasName("PK__TabTerap__EC02E57C85298A87");
 
             entity.Property(e => e.AggiornatoIl).HasColumnType("datetime");
             entity.Property(e => e.CreatoIl).HasColumnType("datetime");
@@ -240,9 +209,9 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<TabTipologieAlert>(entity =>
         {
-            entity.HasKey(e => e.IdTipologiaAlert).HasName("PK__TabTipol__8373FF9BD024AFF5");
+            entity.HasKey(e => e.IdTipologiaAlert).HasName("PK__TabTipol__8373FF9B965E186E");
 
-            entity.HasIndex(e => e.Codice, "UQ__TabTipol__0636EC1D5FBFB804").IsUnique();
+            entity.HasIndex(e => e.Codice, "UQ__TabTipol__0636EC1D87C8EF89").IsUnique();
 
             entity.Property(e => e.Codice)
                 .IsRequired()
@@ -253,9 +222,9 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<TabTipologieMisurazioni>(entity =>
         {
-            entity.HasKey(e => e.IdTipologiaMisurazione).HasName("PK__TabTipol__38C9CC03185898C5");
+            entity.HasKey(e => e.IdTipologiaMisurazione).HasName("PK__TabTipol__38C9CC031024A747");
 
-            entity.HasIndex(e => e.Nome, "UQ__TabTipol__7D8FE3B216C2DBB1").IsUnique();
+            entity.HasIndex(e => e.Nome, "UQ__TabTipol__7D8FE3B2D6683BE9").IsUnique();
 
             entity.Property(e => e.Descrizione).HasColumnType("text");
             entity.Property(e => e.Nome)
@@ -266,9 +235,9 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<TabTipologiePasti>(entity =>
         {
-            entity.HasKey(e => e.IdTipologiaPasto).HasName("PK__TabTipol__58FC87BA83EB411E");
+            entity.HasKey(e => e.IdTipologiaPasto).HasName("PK__TabTipol__58FC87BA2A00460D");
 
-            entity.HasIndex(e => e.Nome, "UQ__TabTipol__7D8FE3B221F60E01").IsUnique();
+            entity.HasIndex(e => e.Nome, "UQ__TabTipol__7D8FE3B2B09CD0A4").IsUnique();
 
             entity.Property(e => e.Descrizione).HasColumnType("text");
             entity.Property(e => e.Nome)
@@ -279,12 +248,16 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<TabUtenti>(entity =>
         {
-            entity.HasKey(e => e.IdUtente).HasName("PK__TabUtent__0816694B0F442A10");
+            entity.HasKey(e => e.IdUtente).HasName("PK__TabUtent__0816694B50F339F3");
 
-            entity.HasIndex(e => e.NomeUtente, "UQ__TabUtent__599A34B41EDBC570").IsUnique();
+            entity.HasIndex(e => e.NomeUtente, "UQ__TabUtent__599A34B49D5F8BDC").IsUnique();
 
-            entity.HasIndex(e => e.Email, "UQ__TabUtent__A9D105349FE1F51D").IsUnique();
+            entity.HasIndex(e => e.Email, "UQ__TabUtent__A9D105346B2FFCC0").IsUnique();
 
+            entity.Property(e => e.Altezza).HasColumnType("numeric(5, 2)");
+            entity.Property(e => e.CodiceFiscale)
+                .HasMaxLength(16)
+                .IsUnicode(false);
             entity.Property(e => e.Cognome)
                 .HasMaxLength(255)
                 .IsUnicode(false);
@@ -302,6 +275,14 @@ public partial class GlucoTrackDBContext : DbContext
                 .IsUnicode(false);
             entity.Property(e => e.NomeUtente)
                 .IsRequired()
+                .HasMaxLength(255)
+                .IsUnicode(false);
+            entity.Property(e => e.OspedaleAffiliazione)
+                .HasMaxLength(255)
+                .IsUnicode(false);
+            entity.Property(e => e.Peso).HasColumnType("numeric(5, 2)");
+            entity.Property(e => e.Sesso).HasMaxLength(100);
+            entity.Property(e => e.Specializzazione)
                 .HasMaxLength(255)
                 .IsUnicode(false);
             entity.Property(e => e.UltimoAccesso).HasColumnType("datetime");

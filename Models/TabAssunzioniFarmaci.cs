@@ -9,7 +9,7 @@ public partial class TabAssunzioniFarmaci
 {
     public int IdAssunzioneFarmaco { get; set; }
 
-    public int IdPaziente { get; set; }
+    public int IdUtente { get; set; }
 
     public int? IdProgrammazione { get; set; }
 
@@ -20,4 +20,6 @@ public partial class TabAssunzioniFarmaci
     public string UnitaMisura { get; set; }
 
     public string Note { get; set; }
+
+    public string NomeFarmacoAssunto { get; set; }
 }

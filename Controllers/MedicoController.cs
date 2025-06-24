@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GlucoTrack_api.Controllers
 {
+    [ApiController]
+    [Route("[controller]")]
     public class MedicoController : Controller
     {
         private readonly GlucoTrackDBContext _context;
@@ -14,13 +16,13 @@ namespace GlucoTrack_api.Controllers
             _context = context;
         }
 
-        [HttpGet("doctor/dashboard")]
+        [HttpGet("dashboard")]
         public async Task<IActionResult> GetDoctorDashboard([FromQuery] int IdMedico)
         {
             return Ok("TBD");
         }
 
-        [HttpGet("doctor/recent-terapies")]
+        [HttpGet("recent-terapies")]
         public async Task<IActionResult> GetDoctorRecentTerapies([FromQuery] int IdMedico)
         {
             List<TabTerapie> terapieRecenti = await _context.TabTerapie
@@ -35,8 +37,8 @@ namespace GlucoTrack_api.Controllers
             return Ok(terapieRecenti);
         }
 
-        [HttpGet("doctor/patients")]
-        public async Task<ActionResult<List<TabPazienti>>> GetDoctorPatients(
+        [HttpGet("patients")]
+        public async Task<ActionResult<List<TabUtenti>>> GetDoctorPatients(
             [FromQuery] int IdMedico,
             [FromQuery] int pagina = 0,
             [FromQuery] string filtroTestuale = "",
@@ -46,50 +48,46 @@ namespace GlucoTrack_api.Controllers
             [FromQuery] string sesso = "",
             [FromQuery] string statoPaziente = "")
         {
-            // Validazione dei parametri
             if (pagina < 0 || etaMin < 0 || etaMax < 0 || etaMin > etaMax)
                 return BadRequest("Invalid parameters.");
 
-            IQueryable<TabPazienti> pazienti = _context.TabPazienti;
+            IQueryable<TabUtenti> utenti = _context.TabUtenti;
 
-            // Filtro per pazienti del medico
+            // Filtro per pazienti del medico (relazione molti-a-molti)
             if (flagSoloPazientiMedico)
             {
-                pazienti = pazienti.Where(p => _context.TabPazientiMedici
-                    .Any(pm => pm.IdMedico == IdMedico && pm.IdPaziente == p.IdPaziente));
+                utenti = utenti.Where(u =>
+                    _context.TabPazientiMedici.Any(pm =>
+                        pm.IdMedico == IdMedico &&
+                        pm.IdPaziente == u.IdUtente &&
+                        (pm.Al == null || pm.Al > DateOnly.FromDateTime(DateTime.UtcNow))
+                    )
+                );
             }
 
             // Filtro testuale
             if (!string.IsNullOrEmpty(filtroTestuale))
             {
-                pazienti = pazienti.Where(p => _context.TabUtenti
-                    .Any(u => u.IdUtente == p.IdUtente &&
-                              (u.Nome.Contains(filtroTestuale) ||
-                               u.Cognome.Contains(filtroTestuale) ||
-                               u.Email.Contains(filtroTestuale))));
+                utenti = utenti.Where(u =>
+                    u.Nome.Contains(filtroTestuale) ||
+                    u.Cognome.Contains(filtroTestuale) ||
+                    u.Email.Contains(filtroTestuale));
             }
 
             // Filtro per sesso
             if (!string.IsNullOrEmpty(sesso))
             {
-                pazienti = pazienti.Where(p => p.Sesso == sesso);
+                utenti = utenti.Where(u => u.Sesso == sesso);
             }
 
             // Filtro per età
             DateOnly today = DateOnly.FromDateTime(DateTime.UtcNow);
             DateOnly dataMin = today.AddYears(-etaMax);
             DateOnly dataMax = today.AddYears(-etaMin);
-            pazienti = pazienti.Where(p => p.DataNascita >= dataMin && p.DataNascita <= dataMax);
-
-            // Filtro per stato paziente (se implementato nei modelli)
-            if (!string.IsNullOrEmpty(statoPaziente))
-            {
-                //pazienti = pazienti.Where(p => p.Stato == statoPaziente);
-                // TODO: Implementare il filtro per stato paziente se necessario
-            }
+            utenti = utenti.Where(u => u.DataNascita >= dataMin && u.DataNascita <= dataMax);
 
             // Paginazione
-            List<TabPazienti> risultatoRicerca = await pazienti
+            var risultatoRicerca = await utenti
                 .Skip(pagina * 10)
                 .Take(10)
                 .ToListAsync();
@@ -107,7 +105,7 @@ namespace GlucoTrack_api.Controllers
             public List<TabProgrammazioneAssunzioni> ProgrammazioniAssunzioni { get; set; }
         }
 
-        [HttpPost("doctor/terapia")]
+        [HttpPost("terapia")]
         public async Task<IActionResult> AddTerapia([FromBody] TerapiaConProgrammazioni terapiaConProgrammazioni)
         {
             if (terapiaConProgrammazioni == null || terapiaConProgrammazioni.Terapia == null)
@@ -139,7 +137,7 @@ namespace GlucoTrack_api.Controllers
             }
         }
 
-        [HttpGet("doctor/terapia")]
+        [HttpGet("terapia")]
         public async Task<IActionResult> GetTerapia([FromQuery] int idTerapia)
         {
             if (idTerapia <= 0)
@@ -154,12 +152,12 @@ namespace GlucoTrack_api.Controllers
                     t.DataInizio,
                     t.DataFine,
                     t.IdMedico,
-                    t.IdPaziente,
+                    t.IdUtente,
                     ProgrammazioniAssunzioni = _context.TabProgrammazioneAssunzioni
                         .Where(pa => pa.IdTerapia == t.IdTerapia)
                         .Select(pa => new
                         {
-                            pa.Farmaco,
+                            pa.NomeFarmacoProgrammato,
                             pa.QuantitaPrevistaN,
                             pa.QuantitaPrevistaUn,
                             pa.DataOraPrevista
@@ -174,7 +172,7 @@ namespace GlucoTrack_api.Controllers
             return Ok(terapia);
         }
 
-        [HttpPut("doctor/terapia")]
+        [HttpPut("terapia")]
         public async Task<IActionResult> UpdateTerapia([FromBody] TerapiaConProgrammazioni terapiaConProgrammazioni)
         {
             if (terapiaConProgrammazioni == null || terapiaConProgrammazioni.Terapia == null || terapiaConProgrammazioni.Terapia.IdTerapia <= 0)
@@ -218,7 +216,7 @@ namespace GlucoTrack_api.Controllers
             }
         }
 
-        [HttpDelete("doctor/terapia")]
+        [HttpDelete("terapia")]
         public async Task<IActionResult> DeleteTerapia([FromQuery] int idTerapia)
         {
             if (idTerapia <= 0)

@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace GlucoTrack_api.Controllers
 {
     [ApiController]
-    [Route("auth")]
+    [Route("[controller]")]
     public class AuthController : ControllerBase
     {
         private readonly GlucoTrackDBContext _context;
@@ -40,24 +40,11 @@ namespace GlucoTrack_api.Controllers
             if (user == null || user.HashPassword != request.Password)
                 return Unauthorized("Invalid credentials");
 
-            // Compose simplified response
-            var response = new
-            {
-                user.IdUtente,
-                user.NomeUtente,
-                user.Nome,
-                user.Cognome,
-                user.Email,
-                user.IdRuolo,
-                user.CreatoIl,
-                user.UltimoAccesso
-            };
-
             // Optionally update last access
             user.UltimoAccesso = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
-            return Ok(response);
+            return Ok(user);
         }
 
         [HttpPost("logout")]

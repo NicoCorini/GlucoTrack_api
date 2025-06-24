@@ -9,7 +9,7 @@ public partial class TabPazientiFattoriRischio
 {
     public int IdPazienteFattoreRischio { get; set; }
 
-    public int IdPaziente { get; set; }
+    public int IdUtente { get; set; }
 
     public int IdFattoreRischio { get; set; }
 }

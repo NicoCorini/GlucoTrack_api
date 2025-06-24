@@ -21,6 +21,20 @@ public partial class TabUtenti
 
     public int IdRuolo { get; set; }
 
+    public DateOnly? DataNascita { get; set; }
+
+    public decimal? Altezza { get; set; }
+
+    public decimal? Peso { get; set; }
+
+    public string CodiceFiscale { get; set; }
+
+    public string Sesso { get; set; }
+
+    public string Specializzazione { get; set; }
+
+    public string OspedaleAffiliazione { get; set; }
+
     public DateTime? CreatoIl { get; set; }
 
     public DateTime? UltimoAccesso { get; set; }

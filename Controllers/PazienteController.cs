@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 namespace GlucoTrack_api.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("[controller]")]
     public class PazienteController : Controller
     {
         private readonly GlucoTrackDBContext _context;
@@ -22,13 +22,6 @@ namespace GlucoTrack_api.Controllers
             if (idUtente <= 0)
                 return BadRequest("Invalid user ID.");
 
-            // Recupera i dati del paziente
-            var paziente = await _context.TabPazienti
-                .FirstOrDefaultAsync(p => p.IdUtente == idUtente);
-
-            if (paziente == null)
-                return NotFound("Patient not found.");
-
             // Recupera i dati dell'utente
             var utente = await _context.TabUtenti
                 .FirstOrDefaultAsync(u => u.IdUtente == idUtente);
@@ -38,21 +31,16 @@ namespace GlucoTrack_api.Controllers
 
             // Recupera il medico attuale
             int idMedicoAttuale = await _context.TabPazientiMedici
-                .Where(pm => pm.IdPaziente == paziente.IdPaziente && pm.Al == null)
+                .Where(pm => pm.IdPaziente == idUtente && pm.Al == null)
                 .Select(m => m.IdMedico)
                 .FirstOrDefaultAsync();
 
-            TabMedici? medicoAttuale = await _context.TabMedici
-                .Where(x => x.IdMedico == idMedicoAttuale)
-                .FirstOrDefaultAsync();
-
-            if (medicoAttuale == null)
-                return NotFound("Doctor not found");
-
+            var medicoAttuale = await _context.TabUtenti
+                .FirstOrDefaultAsync(x => x.IdUtente == idMedicoAttuale);
 
             // Recupera i fattori di rischio
             List<int> idFattoriRischioPaziente = await _context.TabPazientiFattoriRischio
-                .Where(fr => fr.IdPaziente == paziente.IdPaziente)
+                .Where(fr => fr.IdUtente == idUtente)
                 .Select(fr => fr.IdFattoreRischio)
                 .ToListAsync();
 
@@ -60,15 +48,14 @@ namespace GlucoTrack_api.Controllers
                 .Where(fr => idFattoriRischioPaziente.Contains(fr.IdFattoreRischio))
                 .ToListAsync();
 
-
             // Recupera le comorbidità
             var comorbidita = await _context.TabComorbiditaPazienti
-                .Where(c => c.IdPaziente == paziente.IdPaziente)
+                .Where(c => c.IdUtente == idUtente)
                 .ToListAsync();
 
             // Recupera le terapie
             var terapie = await _context.TabTerapie
-                .Where(t => t.IdPaziente == paziente.IdPaziente)
+                .Where(t => t.IdUtente == idUtente)
                 .ToListAsync();
 
             // Composizione della risposta
@@ -91,69 +78,62 @@ namespace GlucoTrack_api.Controllers
             return Ok(response);
         }
 
-
         [HttpGet("glicemic-resume")]
-        public async Task<IActionResult> GetGlicemicResume([FromQuery] int IdPaziente)
+        public async Task<IActionResult> GetGlicemicResume([FromQuery] int idUtente)
         {
-            if (IdPaziente <= 0)
+            if (idUtente <= 0)
                 return BadRequest("Invalid user ID.");
 
-            // Recupera i dati del paziente
-            var paziente = await _context.TabPazienti
-                .FirstOrDefaultAsync(p => p.IdPaziente == IdPaziente);
+            // Recupera i dati dell'utente
+            var utente = await _context.TabUtenti
+                .FirstOrDefaultAsync(u => u.IdUtente == idUtente);
 
-            if (paziente == null)
-                return NotFound("Patient not found.");
+            if (utente == null)
+                return NotFound("User not found.");
 
             // Recupera le misurazioni glicemiche
             var misurazioni = await _context.TabMisurazioniGlicemia
-                .Where(m => m.IdPaziente == paziente.IdPaziente)
-                .OrderByDescending(m => m.MisuratoIl)
+                .Where(m => m.IdUtente == idUtente)
                 .ToListAsync();
 
-            if (misurazioni == null || !misurazioni.Any())
-                return NotFound("No glicemic measurements found for this patient.");
-
-            // Calcolo della media giornaliera degli ultimi 7 giorni
+            // Giorni in italiano
+            string[] giorniSettimana = { "dom", "lun", "mar", "mer", "gio", "ven", "sab" }; 
 
             DateTime oggi = DateTime.Today;
-            DateTime setteGiorniFa = oggi.AddDays(-6); // Include oggi e i 6 giorni precedenti
+            DateTime setteGiorniFa = oggi.AddDays(-6); // 6 giorni fa + oggi
 
-            var mediaGiornaliera = misurazioni
-                .Where(m => m.MisuratoIl.Date >= setteGiorniFa && m.MisuratoIl.Date <= oggi)
-                .GroupBy(m => m.MisuratoIl.Date)
-                .Select(g => new
-                {
-                    Giorno = g.Key.ToString("ddd"),
-                    Media = g.Average(m => m.Valore)
-                })
-                .OrderBy(r => r.Giorno)
-                .ToList();
+            var result = new List<object>();
+            for (int i = 0; i < 7; i++)
+            {
+                var giorno = setteGiorniFa.AddDays(i);
+                var misurazioniGiorno = misurazioni.Where(m => m.MisuratoIl.Date == giorno.Date).ToList();
+                double media = misurazioniGiorno.Any() ? misurazioniGiorno.Average(m => m.Valore) : 0;
+                string giornoItaliano = giorniSettimana[(int)giorno.DayOfWeek];
+                result.Add(new { giorno = giornoItaliano, media = Math.Round(media, 2) });
+            }
 
-            return Ok(mediaGiornaliera);
-
+            return Ok(result);
         }
 
-
         [HttpGet("daily-resume")]
-        public async Task<IActionResult> GetDailyResume([FromQuery] int idPaziente, [FromQuery] DateOnly date)
+        public async Task<IActionResult> GetDailyResume([FromQuery] int idUtente, [FromQuery] DateOnly date)
         {
-            if (idPaziente <= 0 || date == default)
+            if (idUtente <= 0 || date == default)
                 return BadRequest("Invalid parameters.");
 
             // Recupera le rilevazioni glicemia per la data specificata
             var rilevazioniGlicemia = await _context.TabMisurazioniGlicemia
-                .Where(r => r.IdPaziente == idPaziente && DateOnly.FromDateTime(r.MisuratoIl.Date) == date)
+                .Where(r => r.IdUtente == idUtente && DateOnly.FromDateTime(r.MisuratoIl.Date) == date)
                 .ToListAsync();
 
             // Recupera le assunzioni di farmaco per la data specificata
             var assunzioniFarmaco = await _context.TabAssunzioniFarmaci
-                .Where(a => a.IdPaziente == idPaziente && DateOnly.FromDateTime(a.AssuntoIl) == date)
+                .Where(a => a.IdUtente == idUtente && DateOnly.FromDateTime(a.AssuntoIl) == date)
                 .ToListAsync();
 
             // Recupera i sintomi per la data specificata
             var sintomi = await _context.TabSintomi
-                .Where(s => s.IdPaziente == idPaziente && DateOnly.FromDateTime(s.AvvenutoIl) == date)
+                .Where(s => s.IdUtente == idUtente && DateOnly.FromDateTime(s.AvvenutoIl) == date)
                 .ToListAsync();
 
             // Composizione della risposta
@@ -170,7 +150,7 @@ namespace GlucoTrack_api.Controllers
         [HttpPost("add-glicemic-log")]
         public async Task<IActionResult> AddGlicemicLog([FromBody] TabMisurazioniGlicemia glicemiaLog)
         {
-            if (glicemiaLog == null || glicemiaLog.IdPaziente <= 0 || glicemiaLog.Valore <= 0)
+            if (glicemiaLog == null || glicemiaLog.IdUtente <= 0 || glicemiaLog.Valore <= 0)
                 return BadRequest("Invalid glicemic log data.");
 
             try
@@ -188,7 +168,7 @@ namespace GlucoTrack_api.Controllers
         [HttpPost("add-symptom-log")]
         public async Task<IActionResult> AddSymptomLog([FromBody] TabSintomi symptomLog)
         {
-            if (symptomLog == null || symptomLog.IdPaziente <= 0 || string.IsNullOrEmpty(symptomLog.Descrizione))
+            if (symptomLog == null || symptomLog.IdUtente <= 0 || string.IsNullOrEmpty(symptomLog.Descrizione))
                 return BadRequest("Invalid symptom log data.");
 
             try
@@ -206,7 +186,7 @@ namespace GlucoTrack_api.Controllers
         [HttpPost("add-medication-log")]
         public async Task<IActionResult> AddMedicationLog([FromBody] TabAssunzioniFarmaci medicationLog)
         {
-            if (medicationLog == null || medicationLog.IdPaziente <= 0)
+            if (medicationLog == null || medicationLog.IdUtente <= 0)
                 return BadRequest("Invalid medication log data.");
 
             try
@@ -222,21 +202,21 @@ namespace GlucoTrack_api.Controllers
         }
 
         [HttpGet("terapies")]
-        public async Task<IActionResult> GetTerapiesWithAssunzioni([FromQuery] int idPaziente)
+        public async Task<IActionResult> GetTerapiesWithAssunzioni([FromQuery] int idUtente)
         {
-            if (idPaziente <= 0)
+            if (idUtente <= 0)
                 return BadRequest("Invalid patient ID.");
 
-            // Recupera il paziente
-            var paziente = await _context.TabPazienti
-                .FirstOrDefaultAsync(p => p.IdPaziente == idPaziente);
+            // Recupera l'utente
+            var utente = await _context.TabUtenti
+                .FirstOrDefaultAsync(u => u.IdUtente == idUtente);
 
-            if (paziente == null)
+            if (utente == null)
                 return NotFound("Patient not found.");
 
-            // Recupera le terapie associate al paziente
+            // Recupera le terapie associate all'utente
             var terapie = await _context.TabTerapie
-                .Where(t => t.IdPaziente == idPaziente)
+                .Where(t => t.IdUtente == idUtente)
                 .Select(t => new
                 {
                     t.IdTerapia,
@@ -247,7 +227,7 @@ namespace GlucoTrack_api.Controllers
                         .Where(pa => pa.IdTerapia == t.IdTerapia)
                         .Select(pa => new
                         {
-                            pa.Farmaco,
+                            pa.NomeFarmacoProgrammato,
                             pa.QuantitaPrevistaN,
                             pa.QuantitaPrevistaUn,
                             pa.DataOraPrevista
@@ -261,6 +241,5 @@ namespace GlucoTrack_api.Controllers
 
             return Ok(terapie);
         }
-
     }
 }

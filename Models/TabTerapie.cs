@@ -11,7 +11,7 @@ public partial class TabTerapie
 
     public int IdMedico { get; set; }
 
-    public int IdPaziente { get; set; }
+    public int IdUtente { get; set; }
 
     public string Indicazioni { get; set; }
 
