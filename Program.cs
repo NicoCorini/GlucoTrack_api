@@ -1,13 +1,21 @@
 using Microsoft.EntityFrameworkCore;
 using GlucoTrack_api.Models;
+using GlucoTrack_api.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Log della stringa di connessione effettiva
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    Console.Error.WriteLine("[FATAL] Connection string 'DefaultConnection' non trovata in appsettings.json. L'applicazione verrà terminata.");
+    Environment.Exit(1);
+}
+Console.WriteLine($"[DEBUG] Connection string usata: {connectionString}");
 
+// Add services to the container.
 builder.Services.AddDbContext<GlucoTrackDBContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")
-        ?? "Data Source=127.0.0.1,1433;Initial Catalog=GlucoTrackDB;Persist Security Info=True;User ID=sa;Password=baseBase100;Encrypt=False;TrustServerCertificate=Truee"));
+    options.UseSqlServer(connectionString));
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

@@ -1,4 +1,6 @@
 ﻿using GlucoTrack_api.Models;
+using GlucoTrack_api.Data;
+using GlucoTrack_api.DTOs.Auth;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
@@ -17,34 +19,35 @@ namespace GlucoTrack_api.Controllers
             _context = context;
         }
 
-        public class LoginRequest
-        {
-            [Required]
-            public string EmailOrUsername { get; set; }
-
-            [Required]
-            public string Password { get; set; }
-        }
-
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] LoginRequest request)
+        public async Task<ActionResult<LoginResponseDto>> Login([FromBody] LoginRequestDto request)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var user = await _context.TabUtenti
+            var user = await _context.Users
                 .FirstOrDefaultAsync(u =>
                     u.Email == request.EmailOrUsername ||
-                    u.NomeUtente == request.EmailOrUsername);
+                    u.Username == request.EmailOrUsername);
 
-            if (user == null || user.HashPassword != request.Password)
+            if (user == null || user.PasswordHash != request.Password)
                 return Unauthorized("Invalid credentials");
 
             // Optionally update last access
-            user.UltimoAccesso = DateTime.UtcNow;
+            user.LastAccess = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
-            return Ok(user);
+            return Ok(new LoginResponseDto
+            {
+                UserId = user.UserId,
+                Username = user.Username,
+                Email = user.Email,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                LastAccess = user.LastAccess ?? DateTime.UtcNow,
+                RoleId = user.RoleId
+            });
+
         }
 
         [HttpPost("logout")]
