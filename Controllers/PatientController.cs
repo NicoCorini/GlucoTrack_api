@@ -31,7 +31,7 @@ namespace GlucoTrack_api.Controllers
                     .ThenInclude(pd => pd.Doctor)
                 .Include(u => u.PatientRiskFactors)
                     .ThenInclude(prf => prf.RiskFactor)
-                .Include(u => u.PatientComorbidities)
+                .Include(u => u.ClinicalComorbidities)
                 .Include(u => u.TherapiesUser.Where(t => !t.EndDate.HasValue || t.EndDate > nowDateOnly))
                     .ThenInclude(t => t.MedicationSchedules)
                 .FirstOrDefaultAsync(u => u.UserId == userId);
@@ -52,7 +52,7 @@ namespace GlucoTrack_api.Controllers
                 }).ToList();
 
             // Comorbidità (solo stringa, come da model)
-            var comorbidities = user.PatientComorbidities
+            var comorbidities = user.ClinicalComorbidities
                 .Select(pc => new GlucoTrack_api.DTOs.Patient.ComorbidityDto
                 {
                     Comorbidity = pc.Comorbidity ?? string.Empty,
@@ -142,11 +142,22 @@ namespace GlucoTrack_api.Controllers
             var symptoms = await _context.Symptoms
                 .Where(s => s.UserId == userId && DateOnly.FromDateTime(s.OccurredAt) == date)
                 .ToListAsync();
+
+            // Reported conditions: attive in quel giorno (StartDate <= fine giornata e (EndDate >= inizio giornata o EndDate == null))
+            var dayStart = date.ToDateTime(TimeOnly.MinValue);
+            var dayEnd = date.ToDateTime(TimeOnly.MaxValue);
+            var reportedConditions = await _context.ReportedConditions
+                .Where(rc => rc.UserId == userId
+                    && rc.StartDate <= dayEnd
+                    && (rc.EndDate == null || rc.EndDate >= dayStart))
+                .ToListAsync();
+
             var response = new DailyResumeResponseDto
             {
                 GlycemicMeasurements = glycemicMeasurements,
                 MedicationIntakes = medicationIntakes,
-                Symptoms = symptoms
+                Symptoms = symptoms,
+                ReportedConditions = reportedConditions
             };
             return Ok(response);
         }
@@ -348,6 +359,63 @@ namespace GlucoTrack_api.Controllers
             if (therapies == null || !therapies.Any())
                 return NotFound("No therapies found for this patient.");
             return Ok(therapies);
+        }
+
+        // =============================
+        // ReportedConditions CRUD
+        // =============================
+
+        [HttpPost("add-reported-condition")]
+        public async Task<ActionResult> AddOrUpdateReportedCondition([FromBody] AddReportedConditionRequestDto conditionDto)
+        {
+            if (conditionDto == null || conditionDto.UserId <= 0 || string.IsNullOrEmpty(conditionDto.Description))
+                return BadRequest("Invalid reported condition data.");
+            try
+            {
+                if (conditionDto.ConditionId.HasValue && conditionDto.ConditionId > 0)
+                {
+                    // UPDATE
+                    var entity = await _context.ReportedConditions.FirstOrDefaultAsync(c => c.ConditionId == conditionDto.ConditionId);
+                    if (entity == null)
+                        return NotFound("Reported condition not found.");
+                    entity.Description = conditionDto.Description;
+                    entity.StartDate = conditionDto.StartDate;
+                    entity.EndDate = conditionDto.EndDate;
+                    await _context.SaveChangesAsync();
+                    return Ok("Reported condition updated successfully.");
+                }
+                else
+                {
+                    // INSERT
+                    var entity = new ReportedConditions
+                    {
+                        UserId = conditionDto.UserId,
+                        Description = conditionDto.Description,
+                        StartDate = conditionDto.StartDate,
+                        EndDate = conditionDto.EndDate
+                    };
+                    _context.ReportedConditions.Add(entity);
+                    await _context.SaveChangesAsync();
+                    return Ok("Reported condition added successfully.");
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
+
+        [HttpDelete("delete-reported-condition")]
+        public async Task<IActionResult> DeleteReportedCondition([FromQuery] int conditionId)
+        {
+            if (conditionId <= 0)
+                return BadRequest("Invalid reported condition ID.");
+            var entity = await _context.ReportedConditions.FirstOrDefaultAsync(c => c.ConditionId == conditionId);
+            if (entity == null)
+                return NotFound("Reported condition not found.");
+            _context.ReportedConditions.Remove(entity);
+            await _context.SaveChangesAsync();
+            return Ok("Reported condition deleted successfully.");
         }
 
 

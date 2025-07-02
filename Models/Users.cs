@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GlucoTrack_api.Models;
 
-[Index("Username", Name = "UQ__Users__536C85E4DBB6E225", IsUnique = true)]
-[Index("Email", Name = "UQ__Users__A9D10534A9AC1B80", IsUnique = true)]
+[Index("Username", Name = "UQ__Users__536C85E46D0079F4", IsUnique = true)]
+[Index("Email", Name = "UQ__Users__A9D1053410A00B5E", IsUnique = true)]
 public partial class Users
 {
     [Key]
@@ -74,16 +74,13 @@ public partial class Users
     public virtual ICollection<ChangeLogs> ChangeLogs { get; set; } = new List<ChangeLogs>();
 
     [InverseProperty("User")]
-    public virtual ICollection<DiagnosedDiseases> DiagnosedDiseases { get; set; } = new List<DiagnosedDiseases>();
+    public virtual ICollection<ClinicalComorbidities> ClinicalComorbidities { get; set; } = new List<ClinicalComorbidities>();
 
     [InverseProperty("User")]
     public virtual ICollection<GlycemicMeasurements> GlycemicMeasurements { get; set; } = new List<GlycemicMeasurements>();
 
     [InverseProperty("User")]
     public virtual ICollection<MedicationIntakes> MedicationIntakes { get; set; } = new List<MedicationIntakes>();
-
-    [InverseProperty("User")]
-    public virtual ICollection<PatientComorbidities> PatientComorbidities { get; set; } = new List<PatientComorbidities>();
 
     [InverseProperty("Doctor")]
     public virtual ICollection<PatientDoctors> PatientDoctorsDoctor { get; set; } = new List<PatientDoctors>();
@@ -93,6 +90,9 @@ public partial class Users
 
     [InverseProperty("User")]
     public virtual ICollection<PatientRiskFactors> PatientRiskFactors { get; set; } = new List<PatientRiskFactors>();
+
+    [InverseProperty("User")]
+    public virtual ICollection<ReportedConditions> ReportedConditions { get; set; } = new List<ReportedConditions>();
 
     [ForeignKey("RoleId")]
     [InverseProperty("Users")]

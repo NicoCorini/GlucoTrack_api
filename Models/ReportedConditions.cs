@@ -6,22 +6,24 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GlucoTrack_api.Models;
 
-public partial class PatientComorbidities
+public partial class ReportedConditions
 {
     [Key]
-    public int PatientComorbidityId { get; set; }
+    public int ConditionId { get; set; }
 
     public int UserId { get; set; }
 
     [StringLength(255)]
     [Unicode(false)]
-    public string? Comorbidity { get; set; }
+    public string? Description { get; set; }
 
-    public DateOnly? StartDate { get; set; }
+    [Column(TypeName = "datetime")]
+    public DateTime? StartDate { get; set; }
 
-    public DateOnly? EndDate { get; set; }
+    [Column(TypeName = "datetime")]
+    public DateTime? EndDate { get; set; }
 
     [ForeignKey("UserId")]
-    [InverseProperty("PatientComorbidities")]
+    [InverseProperty("ReportedConditions")]
     public virtual Users User { get; set; } = null!;
 }
