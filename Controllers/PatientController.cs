@@ -151,6 +151,20 @@ namespace GlucoTrack_api.Controllers
             return Ok(response);
         }
 
+        [HttpGet("glycemic-measurement")]
+        public async Task<ActionResult<GlycemicMeasurements>> GetGlycemicMeasurement([FromQuery] int glycemicMeasurementId)
+        {
+            if (glycemicMeasurementId <= 0)
+                return BadRequest("Invalid glycemic measurement ID.");
+
+            var entity = await _context.GlycemicMeasurements.FirstOrDefaultAsync(g => g.GlycemicMeasurementId == glycemicMeasurementId);
+
+            if (entity == null)
+                return NotFound("Glycemic measurement not found.");
+
+            return Ok(entity);
+        }
+
         [HttpPost("add-glycemic-log")]
         public async Task<ActionResult> AddOrUpdateGlycemicLog([FromBody] AddGlycemicLogRequestDto glycemicLog)
         {
@@ -213,27 +227,69 @@ namespace GlucoTrack_api.Controllers
             return Ok("Glycemic measurement deleted successfully.");
         }
 
+        [HttpGet("symptom-log")]
+        public async Task<ActionResult<GlycemicMeasurements>> GetSymtptomLog([FromQuery] int symptomId)
+        {
+            if (symptomId <= 0)
+                return BadRequest("Invalid symptom log ID.");
+
+            var entity = await _context.Symptoms.FirstOrDefaultAsync(s => s.SymptomId == symptomId);
+
+            if (entity == null)
+                return NotFound("Symptom log not found.");
+
+            return Ok(entity);
+        }
+
         [HttpPost("add-symptom-log")]
-        public async Task<ActionResult> AddSymptomLog([FromBody] AddSymptomLogRequestDto symptomLog)
+        public async Task<ActionResult> AddOrUpdateSymptomLog([FromBody] AddSymptomLogRequestDto symptomLog)
         {
             if (symptomLog == null || symptomLog.UserId <= 0 || string.IsNullOrEmpty(symptomLog.Description))
                 return BadRequest("Invalid symptom log data.");
             try
             {
-                var entity = new Symptoms
+                if (symptomLog.SymptomId > 0)
                 {
-                    UserId = symptomLog.UserId,
-                    Description = symptomLog.Description,
-                    OccurredAt = symptomLog.OccurredAt
-                };
-                _context.Symptoms.Add(entity);
-                await _context.SaveChangesAsync();
-                return Ok("Symptom log added successfully.");
+                    // Update
+                    var entity = await _context.Symptoms.FirstOrDefaultAsync(s => s.SymptomId == symptomLog.SymptomId);
+                    if (entity == null)
+                        return NotFound("Symptom log not found.");
+                    entity.Description = symptomLog.Description;
+                    entity.OccurredAt = symptomLog.OccurredAt;
+                    await _context.SaveChangesAsync();
+                    return Ok("Symptom log updated successfully.");
+                }
+                else
+                {
+                    // Insert
+                    var entity = new Symptoms
+                    {
+                        UserId = symptomLog.UserId,
+                        Description = symptomLog.Description,
+                        OccurredAt = symptomLog.OccurredAt
+                    };
+                    _context.Symptoms.Add(entity);
+                    await _context.SaveChangesAsync();
+                    return Ok("Symptom log added successfully.");
+                }
             }
             catch (Exception ex)
             {
                 return StatusCode(500, $"Internal server error: {ex.Message}");
             }
+        }
+
+        [HttpDelete("delete-symptom-log")]
+        public async Task<IActionResult> DeleteSymptomLog([FromQuery] int symptomId)
+        {
+            if (symptomId <= 0)
+                return BadRequest("Invalid symptom log ID.");
+            var entity = await _context.Symptoms.FirstOrDefaultAsync(s => s.SymptomId == symptomId);
+            if (entity == null)
+                return NotFound("Symptom log not found.");
+            _context.Symptoms.Remove(entity);
+            await _context.SaveChangesAsync();
+            return Ok("Symptom log deleted successfully.");
         }
 
         [HttpPost("add-medication-log")]
@@ -294,19 +350,7 @@ namespace GlucoTrack_api.Controllers
             return Ok(therapies);
         }
 
-        [HttpGet("glycemic-measurement")]
-        public async Task<ActionResult<GlycemicMeasurements>> GetGlycemicMeasurement([FromQuery] int glycemicMeasurementId)
-        {
-            if (glycemicMeasurementId <= 0)
-                return BadRequest("Invalid glycemic measurement ID.");
 
-            var entity = await _context.GlycemicMeasurements.FirstOrDefaultAsync(g => g.GlycemicMeasurementId == glycemicMeasurementId);
-
-            if (entity == null)
-                return NotFound("Glycemic measurement not found.");
-
-            return Ok(entity);
-        }
 
 
     }
