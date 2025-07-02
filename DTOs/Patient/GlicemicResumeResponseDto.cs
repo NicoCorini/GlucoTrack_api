@@ -1,4 +1,4 @@
-namespace GlucoTrack_api.DTOs.Patient
+namespace GlucoTrack_api.DTOs
 {
     public class GlycemicResumeResponseDto
     {

@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace GlucoTrack_api.DTOs.Auth;
+namespace GlucoTrack_api.DTOs;
 
 public class LoginResponseDto
 {

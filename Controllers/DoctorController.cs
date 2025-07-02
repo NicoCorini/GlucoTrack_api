@@ -2,9 +2,7 @@
 using GlucoTrack_api.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using GlucoTrack_api.DTOs;
 
 namespace GlucoTrack_api.Controllers
 {
@@ -28,11 +26,36 @@ namespace GlucoTrack_api.Controllers
         [HttpGet("recent-therapies")]
         public async Task<IActionResult> GetDoctorRecentTherapies([FromQuery] int doctorId)
         {
-            var recentTherapies = await _context.Therapies
+
+
+            var recentTherapiesRaw = await _context.Therapies
                 .Where(t => t.DoctorId == doctorId)
-                .OrderByDescending(t => t.CreatedAt)
+                .OrderByDescending(t => t.UpdatedAt != null ? t.UpdatedAt : t.CreatedAt)
                 .Take(10)
                 .ToListAsync();
+
+            var recentTherapies = recentTherapiesRaw.Select(t => new RecentTherapyDto
+            {
+                TherapyId = t.TherapyId,
+                Instructions = t.Instructions ?? string.Empty,
+                StartDate = t.StartDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
+                EndDate = t.EndDate,
+                DoctorId = t.DoctorId,
+                UserId = t.UserId,
+                CreatedAt = t.CreatedAt ?? DateTime.MinValue,
+                UpdatedAt = t.UpdatedAt,
+                MedicationSchedules = _context.MedicationSchedules
+                    .Where(ms => ms.TherapyId == t.TherapyId)
+                    .Select(ms => new RecentMedicationScheduleDto
+                    {
+                        MedicationScheduleId = ms.MedicationScheduleId,
+                        MedicationName = ms.MedicationName ?? string.Empty,
+                        ExpectedQuantity = (double)ms.ExpectedQuantity,
+                        ExpectedUnit = ms.ExpectedUnit ?? string.Empty,
+                        ScheduledDateTime = ms.ScheduledDateTime.ToString("yyyy-MM-ddTHH:mm:ss")
+                    })
+                    .ToList()
+            }).ToList();
 
             if (recentTherapies == null || !recentTherapies.Any())
                 return NotFound("No recent therapies found for this doctor.");
@@ -118,31 +141,115 @@ namespace GlucoTrack_api.Controllers
         }
 
         [HttpPost("therapy")]
-        public async Task<IActionResult> AddTherapy([FromBody] TherapyWithSchedules therapyWithSchedules)
+        public async Task<IActionResult> AddOrUpdateTherapy([FromBody] AddOrUpdateTherapyRequestDto dto)
         {
-            if (therapyWithSchedules == null || therapyWithSchedules.Therapy == null)
+            if (dto == null)
                 return BadRequest("Invalid therapy data.");
 
+            using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                var therapy = therapyWithSchedules.Therapy;
-                _context.Therapies.Add(therapy);
-                await _context.SaveChangesAsync();
-
-                if (therapyWithSchedules.MedicationSchedules != null && therapyWithSchedules.MedicationSchedules.Any())
+                Therapies? therapy = null;
+                bool isUpdate = dto.TherapyId.HasValue && dto.TherapyId.Value > 0;
+                if (isUpdate)
                 {
-                    foreach (var schedule in therapyWithSchedules.MedicationSchedules)
+                    int therapyId = dto.TherapyId ?? 0;
+                    therapy = await _context.Therapies.FirstOrDefaultAsync(t => t.TherapyId == therapyId);
+                    if (therapy == null)
+                        return NotFound("Therapy not found.");
+
+                    // Aggiorna i campi base
+                    therapy.Instructions = dto.Instructions;
+                    therapy.StartDate = DateOnly.FromDateTime(dto.StartDate);
+                    therapy.EndDate = dto.EndDate.HasValue ? DateOnly.FromDateTime(dto.EndDate.Value) : null;
+                    therapy.DoctorId = dto.DoctorId;
+                    therapy.UserId = dto.UserId;
+                    therapy.UpdatedAt = DateTime.UtcNow;
+                    _context.Therapies.Update(therapy);
+                    await _context.SaveChangesAsync();
+
+                    // MedicationSchedules: update, insert, delete
+                    var existingSchedules = await _context.MedicationSchedules.Where(ms => ms.TherapyId == therapy.TherapyId).ToListAsync();
+                    var dtoIds = dto.MedicationSchedules
+                        .Where(ms => ms.MedicationScheduleId.HasValue && ms.MedicationScheduleId.Value > 0)
+                        .Select(ms => ms.MedicationScheduleId.GetValueOrDefault())
+                        .ToList();
+                    // Elimina quelli rimossi
+                    var toDelete = existingSchedules.Where(ms => !dtoIds.Contains(ms.MedicationScheduleId)).ToList();
+                    if (toDelete.Any())
                     {
-                        schedule.TherapyId = therapy.TherapyId;
-                        _context.MedicationSchedules.Add(schedule);
+                        _context.MedicationSchedules.RemoveRange(toDelete);
+                        await _context.SaveChangesAsync();
+                    }
+                    // Upsert
+                    foreach (var msDto in dto.MedicationSchedules)
+                    {
+                        if (msDto.MedicationScheduleId.HasValue && msDto.MedicationScheduleId.Value > 0)
+                        {
+                            // Update
+                            var ms = existingSchedules.FirstOrDefault(x => x.MedicationScheduleId == msDto.MedicationScheduleId.Value);
+                            if (ms != null)
+                            {
+                                ms.MedicationName = msDto.MedicationName;
+                                ms.ExpectedQuantity = msDto.ExpectedQuantity;
+                                ms.ExpectedUnit = msDto.ExpectedUnit;
+                                ms.ScheduledDateTime = msDto.ScheduledDateTime;
+                                _context.MedicationSchedules.Update(ms);
+                            }
+                        }
+                        else
+                        {
+                            // Insert
+                            var ms = new Models.MedicationSchedules
+                            {
+                                TherapyId = therapy.TherapyId,
+                                MedicationName = msDto.MedicationName,
+                                ExpectedQuantity = msDto.ExpectedQuantity,
+                                ExpectedUnit = msDto.ExpectedUnit,
+                                ScheduledDateTime = msDto.ScheduledDateTime
+                            };
+                            _context.MedicationSchedules.Add(ms);
+                        }
+                    }
+                    await _context.SaveChangesAsync();
+                }
+                else
+                {
+                    // Insert nuova terapia
+                    therapy = new Therapies
+                    {
+                        DoctorId = dto.DoctorId,
+                        UserId = dto.UserId,
+                        Instructions = dto.Instructions,
+                        StartDate = DateOnly.FromDateTime(dto.StartDate),
+                        EndDate = dto.EndDate.HasValue ? DateOnly.FromDateTime(dto.EndDate.Value) : null,
+                        CreatedAt = DateTime.UtcNow,
+                    };
+                    _context.Therapies.Add(therapy);
+                    await _context.SaveChangesAsync();
+
+                    // Insert medication schedules
+                    foreach (var msDto in dto.MedicationSchedules)
+                    {
+                        var ms = new Models.MedicationSchedules
+                        {
+                            TherapyId = therapy.TherapyId,
+                            MedicationName = msDto.MedicationName,
+                            ExpectedQuantity = msDto.ExpectedQuantity,
+                            ExpectedUnit = msDto.ExpectedUnit,
+                            ScheduledDateTime = msDto.ScheduledDateTime
+                        };
+                        _context.MedicationSchedules.Add(ms);
                     }
                     await _context.SaveChangesAsync();
                 }
 
-                return Ok("Therapy and related schedules added successfully.");
+                await transaction.CommitAsync();
+                return Ok(isUpdate ? "Therapy and schedules updated successfully." : "Therapy and related schedules added successfully.");
             }
             catch (Exception ex)
             {
+                await transaction.RollbackAsync();
                 return StatusCode(500, $"Internal server error: {ex.Message}");
             }
         }

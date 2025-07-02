@@ -1,4 +1,4 @@
-namespace GlucoTrack_api.DTOs.Patient
+namespace GlucoTrack_api.DTOs
 {
     public class TherapyWithSchedulesResponseDto
     {
@@ -9,11 +9,4 @@ namespace GlucoTrack_api.DTOs.Patient
         public List<MedicationScheduleDto> MedicationSchedules { get; set; } = new();
     }
 
-    public class MedicationScheduleDto
-    {
-        public string? MedicationName { get; set; }
-        public double ExpectedQuantity { get; set; }
-        public string? ExpectedUnit { get; set; }
-        public DateTime ScheduledDateTime { get; set; }
-    }
 }

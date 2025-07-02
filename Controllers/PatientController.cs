@@ -2,7 +2,7 @@ using GlucoTrack_api.Models;
 using GlucoTrack_api.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using GlucoTrack_api.DTOs.Patient;
+using GlucoTrack_api.DTOs;
 using System.Globalization;
 
 namespace GlucoTrack_api.Controllers
@@ -16,92 +16,6 @@ namespace GlucoTrack_api.Controllers
         public PatientController(GlucoTrackDBContext context)
         {
             _context = context;
-        }
-
-        [HttpGet("info")]
-        public async Task<ActionResult<PatientInfoResponseDto>> GetPatientInfo([FromQuery] int userId)
-        {
-            if (userId <= 0)
-                return BadRequest("Invalid user ID.");
-
-            // Carica utente con navigation properties corrette
-            var nowDateOnly = DateOnly.FromDateTime(DateTime.Now);
-            var user = await _context.Users
-                .Include(u => u.PatientDoctorsPatient.Where(pd => pd.EndDate == null))
-                    .ThenInclude(pd => pd.Doctor)
-                .Include(u => u.PatientRiskFactors)
-                    .ThenInclude(prf => prf.RiskFactor)
-                .Include(u => u.ClinicalComorbidities)
-                .Include(u => u.TherapiesUser.Where(t => !t.EndDate.HasValue || t.EndDate > nowDateOnly))
-                    .ThenInclude(t => t.MedicationSchedules)
-                .FirstOrDefaultAsync(u => u.UserId == userId);
-
-            if (user == null)
-                return NotFound("User not found.");
-
-            // Medico attuale
-            var currentDoctor = user.PatientDoctorsPatient.FirstOrDefault()?.Doctor;
-
-            // Fattori rischio
-            var riskFactors = user.PatientRiskFactors
-                .Select(prf => new RiskFactorDto
-                {
-                    RiskFactorId = prf.RiskFactor.RiskFactorId,
-                    Label = prf.RiskFactor.Label,
-                    Description = prf.RiskFactor.Description
-                }).ToList();
-
-            // Comorbidità (solo stringa, come da model)
-            var comorbidities = user.ClinicalComorbidities
-                .Select(pc => new GlucoTrack_api.DTOs.Patient.ComorbidityDto
-                {
-                    Comorbidity = pc.Comorbidity ?? string.Empty,
-                    StartDate = pc.StartDate,
-                    EndDate = pc.EndDate
-                }).ToList();
-
-            // Terapie attive con medication schedule
-            var therapies = user.TherapiesUser
-                .Select(t => new TherapyWithSchedulesResponseDto
-                {
-                    TherapyId = t.TherapyId,
-                    Instructions = t.Instructions,
-                    StartDate = t.StartDate?.ToDateTime(TimeOnly.MinValue),
-                    EndDate = t.EndDate?.ToDateTime(TimeOnly.MinValue),
-                    MedicationSchedules = t.MedicationSchedules.Select(ms => new MedicationScheduleDto
-                    {
-                        MedicationName = ms.MedicationName,
-                        ExpectedQuantity = (double)ms.ExpectedQuantity,
-                        ExpectedUnit = ms.ExpectedUnit,
-                        ScheduledDateTime = ms.ScheduledDateTime
-                    }).ToList()
-                }).ToList();
-
-            var response = new PatientInfoResponseDto
-            {
-                UserId = user.UserId,
-                FirstName = user.FirstName ?? string.Empty,
-                LastName = user.LastName ?? string.Empty,
-                Email = user.Email ?? string.Empty,
-                BirthDate = user.BirthDate?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MinValue,
-                Height = user.Height,
-                Weight = user.Weight,
-                FiscalCode = user.FiscalCode ?? string.Empty,
-                Gender = user.Gender ?? string.Empty,
-                CurrentDoctor = currentDoctor == null ? null : new DoctorInfoDto
-                {
-                    DoctorId = currentDoctor.UserId,
-                    FirstName = currentDoctor.FirstName ?? string.Empty,
-                    LastName = currentDoctor.LastName ?? string.Empty,
-                    Email = currentDoctor.Email ?? string.Empty,
-                    Specialization = currentDoctor.Specialization ?? string.Empty,
-                    AffiliatedHospital = currentDoctor.AffiliatedHospital ?? string.Empty
-                },
-                RiskFactors = riskFactors,
-                Comorbidities = comorbidities,
-                Therapies = therapies
-            };
-            return Ok(response);
         }
 
         [HttpGet("glycemic-resume")]
@@ -351,7 +265,7 @@ namespace GlucoTrack_api.Controllers
                         .Select(ms => new MedicationScheduleDto
                         {
                             MedicationName = ms.MedicationName,
-                            ExpectedQuantity = (double)ms.ExpectedQuantity,
+                            ExpectedQuantity = ms.ExpectedQuantity,
                             ExpectedUnit = ms.ExpectedUnit,
                             ScheduledDateTime = ms.ScheduledDateTime
                         }).ToList()
