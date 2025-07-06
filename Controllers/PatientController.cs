@@ -218,30 +218,66 @@ namespace GlucoTrack_api.Controllers
         }
 
         [HttpPost("add-medication-log")]
-        public async Task<ActionResult> AddMedicationLog([FromBody] AddMedicationLogRequestDto medicationLog)
+        public async Task<ActionResult> AddOrUpdateMedicationLog([FromBody] AddMedicationLogRequestDto medicationLog)
         {
             if (medicationLog == null || medicationLog.UserId <= 0)
                 return BadRequest("Invalid medication log data.");
             try
             {
-                var entity = new MedicationIntakes
+                if (medicationLog.MedicationIntakeId > 0)
                 {
-                    UserId = medicationLog.UserId,
-                    IntakeDateTime = medicationLog.IntakeDateTime,
-                    ExpectedQuantityValue = (decimal)medicationLog.ExpectedQuantityValue,
-                    Unit = medicationLog.Unit ?? string.Empty,
-                    Note = medicationLog.Note,
-                    MedicationTakenName = medicationLog.MedicationTakenName,
-                    MedicationScheduleId = medicationLog.MedicationScheduleId
-                };
-                _context.MedicationIntakes.Add(entity);
-                await _context.SaveChangesAsync();
-                return Ok("Medication log added successfully.");
+                    // UPDATE
+                    var entity = await _context.MedicationIntakes
+                        .FirstOrDefaultAsync(m => m.MedicationIntakeId == medicationLog.MedicationIntakeId);
+                    if (entity == null)
+                        return NotFound("Medication log not found.");
+
+                    entity.UserId = medicationLog.UserId;
+                    entity.IntakeDateTime = medicationLog.IntakeDateTime;
+                    entity.ExpectedQuantityValue = (decimal)medicationLog.ExpectedQuantityValue;
+                    entity.Unit = medicationLog.Unit ?? string.Empty;
+                    entity.Note = medicationLog.Note;
+                    entity.MedicationTakenName = medicationLog.MedicationTakenName;
+                    entity.MedicationScheduleId = medicationLog.MedicationScheduleId;
+
+                    await _context.SaveChangesAsync();
+                    return Ok("Medication log updated successfully.");
+                }
+                else
+                {
+                    // INSERT
+                    var entity = new MedicationIntakes
+                    {
+                        UserId = medicationLog.UserId,
+                        IntakeDateTime = medicationLog.IntakeDateTime,
+                        ExpectedQuantityValue = (decimal)medicationLog.ExpectedQuantityValue,
+                        Unit = medicationLog.Unit ?? string.Empty,
+                        Note = medicationLog.Note,
+                        MedicationTakenName = medicationLog.MedicationTakenName,
+                        MedicationScheduleId = medicationLog.MedicationScheduleId
+                    };
+                    _context.MedicationIntakes.Add(entity);
+                    await _context.SaveChangesAsync();
+                    return Ok("Medication log added successfully.");
+                }
             }
             catch (Exception ex)
             {
                 return StatusCode(500, $"Internal server error: {ex.Message}");
             }
+        }
+
+        [HttpDelete("delete-medication-log")]
+        public async Task<IActionResult> DeleteMedicationLog([FromQuery] int medicationIntakeId)
+        {
+            if (medicationIntakeId <= 0)
+                return BadRequest("Invalid medication intake ID.");
+            var entity = await _context.MedicationIntakes.FirstOrDefaultAsync(m => m.MedicationIntakeId == medicationIntakeId);
+            if (entity == null)
+                return NotFound("Medication log not found.");
+            _context.MedicationIntakes.Remove(entity);
+            await _context.SaveChangesAsync();
+            return Ok("Medication log deleted successfully.");
         }
 
         [HttpGet("therapies")]
@@ -253,21 +289,23 @@ namespace GlucoTrack_api.Controllers
             if (user == null)
                 return NotFound("Patient not found.");
             var therapies = await _context.Therapies
-                .Where(t => t.UserId == userId)
+                .Where(t => t.UserId == userId && t.StartDate <= DateOnly.FromDateTime(DateTime.Now) && (t.EndDate >= DateOnly.FromDateTime(DateTime.Now) || t.EndDate == null))
                 .Select(t => new TherapyWithSchedulesResponseDto
                 {
                     TherapyId = t.TherapyId,
+                    Title = t.Title,
                     Instructions = t.Instructions,
-                    StartDate = t.StartDate.HasValue ? t.StartDate.Value.ToDateTime(TimeOnly.MinValue) : (DateTime?)null,
-                    EndDate = t.EndDate.HasValue ? t.EndDate.Value.ToDateTime(TimeOnly.MinValue) : (DateTime?)null,
+                    StartDate = t.StartDate.HasValue ? t.StartDate.Value.ToDateTime(TimeOnly.MinValue) : null,
+                    EndDate = t.EndDate.HasValue ? t.EndDate.Value.ToDateTime(TimeOnly.MinValue) : null,
                     MedicationSchedules = _context.MedicationSchedules
                         .Where(ms => ms.TherapyId == t.TherapyId)
                         .Select(ms => new MedicationScheduleDto
                         {
+                            MedicationScheduleId = ms.MedicationScheduleId,
                             MedicationName = ms.MedicationName,
                             ExpectedQuantity = ms.ExpectedQuantity,
                             ExpectedUnit = ms.ExpectedUnit,
-                            ScheduledDateTime = ms.ScheduledDateTime
+                            ScheduledTime = ms.ScheduledTime
                         }).ToList()
                 }).ToListAsync();
             if (therapies == null || !therapies.Any())

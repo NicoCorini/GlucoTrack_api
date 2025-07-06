@@ -2,6 +2,7 @@ namespace GlucoTrack_api.DTOs
 {
     public class AddMedicationLogRequestDto
     {
+        public int MedicationIntakeId { get; set; } // 0 = insert, >0 = update
         public int UserId { get; set; }
         public DateTime IntakeDateTime { get; set; }
         public double ExpectedQuantityValue { get; set; }
@@ -9,5 +10,6 @@ namespace GlucoTrack_api.DTOs
         public string? Note { get; set; }
         public string? MedicationTakenName { get; set; }
         public int? MedicationScheduleId { get; set; }
+
     }
 }

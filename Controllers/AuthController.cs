@@ -69,7 +69,7 @@ namespace GlucoTrack_api.Controllers
                 .Include(u => u.PatientRiskFactors)
                     .ThenInclude(prf => prf.RiskFactor)
                 .Include(u => u.ClinicalComorbidities)
-                .Include(u => u.TherapiesUser.Where(t => !t.EndDate.HasValue || t.EndDate > nowDateOnly))
+                .Include(u => u.TherapiesUser)
                     .ThenInclude(t => t.MedicationSchedules)
                 .FirstOrDefaultAsync(u => u.UserId == userId);
 
@@ -110,7 +110,7 @@ namespace GlucoTrack_api.Controllers
                         MedicationName = ms.MedicationName,
                         ExpectedQuantity = ms.ExpectedQuantity,
                         ExpectedUnit = ms.ExpectedUnit,
-                        ScheduledDateTime = ms.ScheduledDateTime
+                        ScheduledTime = ms.ScheduledTime
                     }).ToList()
                 }).ToList();
 

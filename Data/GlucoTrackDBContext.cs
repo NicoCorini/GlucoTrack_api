@@ -52,51 +52,51 @@ public partial class GlucoTrackDBContext : DbContext
     {
         modelBuilder.Entity<AlertRecipients>(entity =>
         {
-            entity.HasKey(e => e.AlertRecipientId).HasName("PK__AlertRec__51A78A671DF52732");
+            entity.HasKey(e => e.AlertRecipientId).HasName("PK__AlertRec__51A78A673198734F");
 
             entity.Property(e => e.IsRead).HasDefaultValue(false);
 
             entity.HasOne(d => d.Alert).WithMany(p => p.AlertRecipients)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AlertReci__Alert__6E01572D");
+                .HasConstraintName("FK__AlertReci__Alert__6EF57B66");
 
             entity.HasOne(d => d.RecipientUser).WithMany(p => p.AlertRecipients)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AlertReci__Recip__6EF57B66");
+                .HasConstraintName("FK__AlertReci__Recip__6FE99F9F");
         });
 
         modelBuilder.Entity<AlertTypes>(entity =>
         {
-            entity.HasKey(e => e.AlertTypeId).HasName("PK__AlertTyp__016D41BDF1B39288");
+            entity.HasKey(e => e.AlertTypeId).HasName("PK__AlertTyp__016D41BD3B3DCF43");
         });
 
         modelBuilder.Entity<Alerts>(entity =>
         {
-            entity.HasKey(e => e.AlertId).HasName("PK__Alerts__EBB16A8DCC230848");
+            entity.HasKey(e => e.AlertId).HasName("PK__Alerts__EBB16A8D99B911A6");
 
             entity.HasOne(d => d.AlertType).WithMany(p => p.Alerts)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Alerts__AlertTyp__6A30C649");
+                .HasConstraintName("FK__Alerts__AlertTyp__6B24EA82");
 
             entity.HasOne(d => d.User).WithMany(p => p.Alerts)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Alerts__UserId__6B24EA82");
+                .HasConstraintName("FK__Alerts__UserId__6C190EBB");
         });
 
         modelBuilder.Entity<ChangeLogs>(entity =>
         {
-            entity.HasKey(e => e.ChangeLogId).HasName("PK__ChangeLo__6AD2E8C7A66B2150");
+            entity.HasKey(e => e.ChangeLogId).HasName("PK__ChangeLo__6AD2E8C7921B6684");
 
             entity.Property(e => e.Timestamp).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.Doctor).WithMany(p => p.ChangeLogs)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__ChangeLog__Docto__72C60C4A");
+                .HasConstraintName("FK__ChangeLog__Docto__73BA3083");
         });
 
         modelBuilder.Entity<ClinicalComorbidities>(entity =>
         {
-            entity.HasKey(e => e.ClinicalComorbidityId).HasName("PK__Clinical__339FB25EC50A2539");
+            entity.HasKey(e => e.ClinicalComorbidityId).HasName("PK__Clinical__339FB25E2CFEF8C8");
 
             entity.HasOne(d => d.User).WithMany(p => p.ClinicalComorbidities)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -105,54 +105,54 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<GlycemicMeasurements>(entity =>
         {
-            entity.HasKey(e => e.GlycemicMeasurementId).HasName("PK__Glycemic__A931B6854863EB75");
+            entity.HasKey(e => e.GlycemicMeasurementId).HasName("PK__Glycemic__A931B6854C897156");
 
             entity.HasOne(d => d.MealType).WithMany(p => p.GlycemicMeasurements)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__GlycemicM__MealT__5EBF139D");
+                .HasConstraintName("FK__GlycemicM__MealT__5FB337D6");
 
             entity.HasOne(d => d.MeasurementType).WithMany(p => p.GlycemicMeasurements)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__GlycemicM__Measu__5DCAEF64");
+                .HasConstraintName("FK__GlycemicM__Measu__5EBF139D");
 
             entity.HasOne(d => d.User).WithMany(p => p.GlycemicMeasurements)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__GlycemicM__UserI__5CD6CB2B");
+                .HasConstraintName("FK__GlycemicM__UserI__5DCAEF64");
         });
 
         modelBuilder.Entity<MealTypes>(entity =>
         {
-            entity.HasKey(e => e.MealTypeId).HasName("PK__MealType__702B379ECE0FB0A9");
+            entity.HasKey(e => e.MealTypeId).HasName("PK__MealType__702B379E45A461C4");
         });
 
         modelBuilder.Entity<MeasurementTypes>(entity =>
         {
-            entity.HasKey(e => e.MeasurementTypeId).HasName("PK__Measurem__167933E7AE5FCD55");
+            entity.HasKey(e => e.MeasurementTypeId).HasName("PK__Measurem__167933E788DBA684");
         });
 
         modelBuilder.Entity<MedicationIntakes>(entity =>
         {
-            entity.HasKey(e => e.MedicationIntakeId).HasName("PK__Medicati__698AF4E539F9101C");
+            entity.HasKey(e => e.MedicationIntakeId).HasName("PK__Medicati__698AF4E554223EEC");
 
-            entity.HasOne(d => d.MedicationSchedule).WithMany(p => p.MedicationIntakes).HasConstraintName("FK__Medicatio__Medic__5441852A");
+            entity.HasOne(d => d.MedicationSchedule).WithMany(p => p.MedicationIntakes).HasConstraintName("FK__Medicatio__Medic__5535A963");
 
             entity.HasOne(d => d.User).WithMany(p => p.MedicationIntakes)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Medicatio__UserI__534D60F1");
+                .HasConstraintName("FK__Medicatio__UserI__5441852A");
         });
 
         modelBuilder.Entity<MedicationSchedules>(entity =>
         {
-            entity.HasKey(e => e.MedicationScheduleId).HasName("PK__Medicati__EDCDE99CDFA8FA82");
+            entity.HasKey(e => e.MedicationScheduleId).HasName("PK__Medicati__EDCDE99C28946B2D");
 
             entity.HasOne(d => d.Therapy).WithMany(p => p.MedicationSchedules)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Medicatio__Thera__5070F446");
+                .HasConstraintName("FK__Medicatio__Thera__5165187F");
         });
 
         modelBuilder.Entity<PatientDoctors>(entity =>
         {
-            entity.HasKey(e => e.PatientDoctorId).HasName("PK__PatientD__2BA45955C3F48DFC");
+            entity.HasKey(e => e.PatientDoctorId).HasName("PK__PatientD__2BA45955BEC709D5");
 
             entity.HasOne(d => d.Doctor).WithMany(p => p.PatientDoctorsDoctor)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -165,7 +165,7 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<PatientRiskFactors>(entity =>
         {
-            entity.HasKey(e => e.PatientRiskFactorId).HasName("PK__PatientR__9562BCDF187CCED5");
+            entity.HasKey(e => e.PatientRiskFactorId).HasName("PK__PatientR__9562BCDF5D6DED55");
 
             entity.HasOne(d => d.RiskFactor).WithMany(p => p.PatientRiskFactors)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -178,39 +178,41 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<ReportedConditions>(entity =>
         {
-            entity.HasKey(e => e.ConditionId).HasName("PK__Reported__37F5C0CFA4483895");
+            entity.HasKey(e => e.ConditionId).HasName("PK__Reported__37F5C0CFA3C4B79B");
 
             entity.HasOne(d => d.User).WithMany(p => p.ReportedConditions)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__ReportedC__UserI__6477ECF3");
+                .HasConstraintName("FK__ReportedC__UserI__656C112C");
         });
 
         modelBuilder.Entity<RiskFactors>(entity =>
         {
-            entity.HasKey(e => e.RiskFactorId).HasName("PK__RiskFact__7C28B9143BF313F0");
+            entity.HasKey(e => e.RiskFactorId).HasName("PK__RiskFact__7C28B91410B224DF");
         });
 
         modelBuilder.Entity<Roles>(entity =>
         {
-            entity.HasKey(e => e.RoleId).HasName("PK__Roles__8AFACE1A44D8AEA2");
+            entity.HasKey(e => e.RoleId).HasName("PK__Roles__8AFACE1AA9702037");
         });
 
         modelBuilder.Entity<Symptoms>(entity =>
         {
-            entity.HasKey(e => e.SymptomId).HasName("PK__Symptoms__D26ED8962496E3CF");
+            entity.HasKey(e => e.SymptomId).HasName("PK__Symptoms__D26ED896F72F2169");
 
             entity.HasOne(d => d.User).WithMany(p => p.Symptoms)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Symptoms__UserId__619B8048");
+                .HasConstraintName("FK__Symptoms__UserId__628FA481");
         });
 
         modelBuilder.Entity<Therapies>(entity =>
         {
-            entity.HasKey(e => e.TherapyId).HasName("PK__Therapie__2D1FD1E2F3D3DC15");
+            entity.HasKey(e => e.TherapyId).HasName("PK__Therapie__2D1FD1E2CABABA35");
 
             entity.HasOne(d => d.Doctor).WithMany(p => p.TherapiesDoctor)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__Therapies__Docto__4CA06362");
+
+            entity.HasOne(d => d.PreviousTherapy).WithMany(p => p.InversePreviousTherapy).HasConstraintName("FK__Therapies__Previ__4E88ABD4");
 
             entity.HasOne(d => d.User).WithMany(p => p.TherapiesUser)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -219,7 +221,7 @@ public partial class GlucoTrackDBContext : DbContext
 
         modelBuilder.Entity<Users>(entity =>
         {
-            entity.HasKey(e => e.UserId).HasName("PK__Users__1788CC4C4EAC6132");
+            entity.HasKey(e => e.UserId).HasName("PK__Users__1788CC4C2F630D38");
 
             entity.HasOne(d => d.Role).WithMany(p => p.Users)
                 .OnDelete(DeleteBehavior.ClientSetNull)

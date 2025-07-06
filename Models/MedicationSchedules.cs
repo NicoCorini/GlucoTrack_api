@@ -24,8 +24,7 @@ public partial class MedicationSchedules
     [Unicode(false)]
     public string ExpectedUnit { get; set; } = null!;
 
-    [Column(TypeName = "datetime")]
-    public DateTime ScheduledDateTime { get; set; }
+    public TimeOnly ScheduledTime { get; set; }
 
     [InverseProperty("MedicationSchedule")]
     public virtual ICollection<MedicationIntakes> MedicationIntakes { get; set; } = new List<MedicationIntakes>();

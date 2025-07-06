@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GlucoTrack_api.Models;
 
-[Index("Label", Name = "UQ__RiskFact__EDBE0C582C05A399", IsUnique = true)]
+[Index("Label", Name = "UQ__RiskFact__EDBE0C58FE5409D6", IsUnique = true)]
 public partial class RiskFactors
 {
     [Key]
