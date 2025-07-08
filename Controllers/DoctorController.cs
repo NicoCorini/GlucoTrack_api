@@ -356,5 +356,318 @@ namespace GlucoTrack_api.Controllers
                 return StatusCode(500, $"Internal server error: {ex.Message}");
             }
         }
+
+
+        [HttpGet("patient-analytics")]
+        public async Task<IActionResult> GetPatientAnalytics([FromQuery] int userId)
+        {
+            // Recupera info base paziente
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+            if (user == null)
+                return NotFound("Patient not found.");
+
+            var dto = new PatientAnalyticsDto
+            {
+                UserId = user.UserId,
+                FirstName = user.FirstName ?? string.Empty,
+                LastName = user.LastName ?? string.Empty,
+                Email = user.Email ?? string.Empty,
+                BirthDate = user.BirthDate.HasValue ? user.BirthDate.Value.ToDateTime(TimeOnly.MinValue) : (DateTime?)null,
+                Gender = user.Gender,
+                Height = user.Height,
+                Weight = user.Weight,
+            };
+
+
+            // Glicemia: andamento settimanale/mensile (media, min, max, stddev per periodo)
+            var now = DateTime.UtcNow;
+            var fromDate = now.AddMonths(-6); // ultimi 6 mesi
+            var glycemic = await _context.GlycemicMeasurements
+                .Where(g => g.UserId == userId && g.MeasurementDateTime >= fromDate)
+                .ToListAsync();
+
+            // Raggruppa per settimana (ultime 4 settimane)
+            var last4WeeksMonday = now.Date.AddDays(-(int)now.DayOfWeek + (int)DayOfWeek.Monday).AddDays(-21); // Lunedì di 4 settimane fa
+            // Costruisci le ultime 4 settimane (anche se vuote)
+            var weeklyTrends = new List<DTOs.GlycemicTrendDto>();
+            for (int i = 3; i >= 0; i--)
+            {
+                var weekStart = last4WeeksMonday.AddDays(i * 7);
+                var weekEnd = weekStart.AddDays(7);
+                var weekYear = System.Globalization.ISOWeek.GetYear(weekStart);
+                var weekNum = System.Globalization.ISOWeek.GetWeekOfYear(weekStart);
+                var periodKey = $"{weekYear}-W{weekNum:D2}";
+                var weekData = glycemic.Where(g => g.MeasurementDateTime.Date >= weekStart && g.MeasurementDateTime.Date < weekEnd).ToList();
+                if (weekData.Any())
+                {
+                    double avg = weekData.Average(x => x.Value);
+                    weeklyTrends.Add(new DTOs.GlycemicTrendDto
+                    {
+                        Period = periodKey,
+                        Average = avg,
+                        Min = weekData.Min(x => x.Value),
+                        Max = weekData.Max(x => x.Value),
+                        StdDev = Math.Sqrt(weekData.Select(x => Math.Pow(x.Value - avg, 2)).Average())
+                    });
+                }
+                else
+                {
+                    weeklyTrends.Add(new DTOs.GlycemicTrendDto
+                    {
+                        Period = periodKey,
+                        Average = 0,
+                        Min = 0,
+                        Max = 0,
+                        StdDev = 0
+                    });
+                }
+            }
+            dto.GlycemicTrends = weeklyTrends;
+
+            // Calcolo aggregato min, max, stddev sulle ultime 4 settimane (tutti i valori)
+            var glycemicLast4Weeks = glycemic.Where(g => g.MeasurementDateTime.Date >= last4WeeksMonday).ToList();
+            double? min4w = glycemicLast4Weeks.Any() ? glycemicLast4Weeks.Min(g => (double?)g.Value) : null;
+            double? max4w = glycemicLast4Weeks.Any() ? glycemicLast4Weeks.Max(g => (double?)g.Value) : null;
+            double? avg4w = glycemicLast4Weeks.Any() ? glycemicLast4Weeks.Average(g => (double)g.Value) : null;
+            double? stddev4w = null;
+            if (glycemicLast4Weeks.Any() && avg4w.HasValue)
+            {
+                stddev4w = Math.Sqrt(glycemicLast4Weeks.Select(x => Math.Pow(x.Value - avg4w.Value, 2)).Average());
+            }
+            dto.GlycemicLast4WeeksStats = new GlycemicStatsDto
+            {
+                Min = min4w,
+                Max = max4w,
+                StdDev = stddev4w
+            };
+
+            // Distribuzione valori glicemici (istogramma, boxplot)
+            if (glycemic.Any())
+            {
+                var values = glycemic.Select(g => g.Value).OrderBy(x => x).ToList();
+                int n = values.Count;
+                double median = n % 2 == 1 ? values[n / 2] : (values[n / 2 - 1] + values[n / 2]) / 2.0;
+                double q1 = values[(int)(n * 0.25)];
+                double q3 = values[(int)(n * 0.75)];
+                double min = values.First();
+                double max = values.Last();
+                var iqr = q3 - q1;
+                var outliers = values.Where(v => v < q1 - 1.5 * iqr || v > q3 + 1.5 * iqr).ToList();
+                dto.GlycemicDistribution = new DTOs.GlycemicDistributionDto
+                {
+                    Values = values.Select(v => (int)v).ToList(),
+                    Q1 = q1,
+                    Median = median,
+                    Q3 = q3,
+                    Min = min,
+                    Max = max,
+                    Outliers = outliers.Select(v => (int)v).ToList(),
+                    TargetMin = 70,
+                    TargetMax = 180
+                };
+            }
+
+            // Adesione terapia: % assunzioni programmate vs effettive (ultimi 30 giorni)
+            var lastMonth = now.AddDays(-30);
+            // Conta solo le MedicationSchedules di terapie attive nel periodo (StartDate <= giorno <= EndDate/null)
+            var therapies = await _context.Therapies
+                .Where(t => t.UserId == userId && t.StartDate <= DateOnly.FromDateTime(now) && (t.EndDate == null || t.EndDate >= DateOnly.FromDateTime(lastMonth)))
+                .ToListAsync();
+
+            int scheduled = 0;
+            foreach (var therapy in therapies)
+            {
+                // Per ogni giorno in cui la terapia è attiva nell'ultimo mese
+                var therapyStart = therapy.StartDate ?? DateOnly.FromDateTime(now);
+                var therapyEnd = therapy.EndDate ?? DateOnly.FromDateTime(now);
+                var from = therapyStart > DateOnly.FromDateTime(lastMonth) ? therapyStart : DateOnly.FromDateTime(lastMonth);
+                var to = therapy.EndDate == null || therapyEnd > DateOnly.FromDateTime(now) ? DateOnly.FromDateTime(now) : therapyEnd;
+                for (var day = from; day <= to; day = day.AddDays(1))
+                {
+                    // Ogni giorno, conta tutte le MedicationSchedules della terapia
+                    var ms = await _context.MedicationSchedules.Where(msc => msc.TherapyId == therapy.TherapyId).ToListAsync();
+                    scheduled += ms.Count;
+                }
+            }
+            var performed = await _context.MedicationIntakes
+                .Where(mi => mi.UserId == userId && mi.IntakeDateTime >= lastMonth && mi.MedicationScheduleId != null)
+                .CountAsync();
+            dto.TherapyAdherence = new DTOs.TherapyAdherenceDto
+            {
+                ScheduledIntakes = scheduled,
+                PerformedIntakes = performed,
+                AdherencePercent = scheduled > 0 ? Math.Round(100.0 * performed / scheduled, 1) : 0
+            };
+
+            // Sintomi recenti (ultimi 30 giorni)
+            dto.RecentSymptoms = await _context.Symptoms
+                .Where(s => s.UserId == userId && s.OccurredAt >= lastMonth)
+                .OrderByDescending(s => s.OccurredAt)
+                .Select(s => new DTOs.SymptomDto
+                {
+                    Description = s.Description ?? string.Empty,
+                    OccurredAt = s.OccurredAt
+                })
+                .ToListAsync();
+
+            // Alert clinici recenti (ultimi 30 giorni)
+            dto.RecentAlerts = await _context.AlertRecipients
+                .Where(ar => ar.RecipientUserId == userId && ar.Alert.CreatedAt >= lastMonth)
+                .OrderByDescending(ar => ar.Alert.CreatedAt)
+                .Select(ar => new DTOs.AlertDto
+                {
+                    Type = ar.Alert.AlertType.Label,
+                    Message = ar.Alert.Message,
+                    CreatedAt = ar.Alert.CreatedAt ?? DateTime.MinValue
+                })
+                .ToListAsync();
+
+            // Comorbidità
+            dto.Comorbidities = await _context.ClinicalComorbidities
+                .Where(c => c.UserId == userId)
+                .Select(c => new DTOs.ComorbidityDto
+                {
+                    Id = c.ClinicalComorbidityId,
+                    Comorbidity = c.Comorbidity ?? string.Empty,
+                    StartDate = c.StartDate,
+                    EndDate = c.EndDate
+                })
+                .ToListAsync();
+
+            // Fattori di rischio
+            dto.RiskFactors = await _context.PatientRiskFactors
+                .Where(prf => prf.UserId == userId)
+                .Select(prf => prf.RiskFactor)
+                .ToListAsync();
+
+            // Assunzioni farmaci extra-terapia recenti (ultimi 30 giorni)
+            dto.RecentExtraMedicationIntakes = await _context.MedicationIntakes
+                .Where(mi => mi.UserId == userId && mi.IntakeDateTime >= lastMonth && mi.MedicationScheduleId == null)
+                .OrderByDescending(mi => mi.IntakeDateTime)
+                .Select(mi => new DTOs.ExtraMedicationIntakeDto
+                {
+                    MedicationName = mi.MedicationTakenName ?? string.Empty,
+                    Quantity = (double)mi.ExpectedQuantityValue,
+                    Unit = mi.Unit ?? string.Empty,
+                    IntakeDateTime = mi.IntakeDateTime,
+                    Note = mi.Note
+                })
+                .ToListAsync();
+
+            return Ok(dto);
+        }
+
+        [HttpPost("update-comorbidities-riskfactors")]
+        public async Task<IActionResult> UpdateComorbiditiesAndRiskFactors([FromBody] UpdateComorbiditiesAndRiskFactorsDto dto)
+        {
+            if (dto == null || dto.UserId <= 0)
+                return BadRequest("Invalid data.");
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // Recupera le comorbidità esistenti per l'utente
+                var existingComorbidities = await _context.ClinicalComorbidities
+                    .Where(c => c.UserId == dto.UserId)
+                    .ToListAsync();
+
+                // Aggiungi solo le nuove comorbidità (stessa comorbidity e start date considerate "uguali")
+                foreach (var c in dto.Comorbidities)
+                {
+                    bool alreadyExists = existingComorbidities.Any(ec =>
+                        ec.ClinicalComorbidityId == c.Id
+                    );
+                    if (!alreadyExists)
+                    {
+                        var newComorbidity = new ClinicalComorbidities
+                        {
+                            UserId = dto.UserId,
+                            Comorbidity = c.Comorbidity,
+                            StartDate = c.StartDate,
+                            EndDate = c.EndDate
+                        };
+                        _context.ClinicalComorbidities.Add(newComorbidity);
+                    }
+                    else
+                    {
+                        // Aggiorna la comorbidità esistente se necessario
+                        var existingComorbidity = existingComorbidities.First(ec => ec.ClinicalComorbidityId == c.Id);
+                        existingComorbidity.Comorbidity = c.Comorbidity;
+                        existingComorbidity.StartDate = c.StartDate;
+                        existingComorbidity.EndDate = c.EndDate;
+                        _context.ClinicalComorbidities.Update(existingComorbidity);
+                    }
+                }
+                await _context.SaveChangesAsync();
+
+                // Recupera i risk factors esistenti per l'utente
+                var existingRiskFactors = await _context.PatientRiskFactors
+                    .Where(rf => rf.UserId == dto.UserId)
+                    .ToListAsync();
+
+                // Aggiungi solo i nuovi risk factors
+                foreach (var riskFactorId in dto.RiskFactorIds)
+                {
+                    bool alreadyExists = existingRiskFactors.Any(rf => rf.RiskFactorId == riskFactorId);
+                    if (!alreadyExists)
+                    {
+                        var newRisk = new PatientRiskFactors
+                        {
+                            UserId = dto.UserId,
+                            RiskFactorId = riskFactorId
+                        };
+                        _context.PatientRiskFactors.Add(newRisk);
+                    }
+                }
+                await _context.SaveChangesAsync();
+
+                await transaction.CommitAsync();
+                return Ok("Comorbidities and risk factors added successfully.");
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Elimina un fattore di rischio specifico per un utente.
+        /// </summary>
+        [HttpDelete("delete-user-riskfactor")]
+        public async Task<IActionResult> DeleteUserRiskFactor([FromQuery] int userId, [FromQuery] int riskFactorId)
+        {
+            if (userId <= 0 || riskFactorId <= 0)
+                return BadRequest("Invalid userId or riskFactorId.");
+
+            var risk = await _context.PatientRiskFactors.FirstOrDefaultAsync(rf => rf.UserId == userId && rf.RiskFactorId == riskFactorId);
+            if (risk == null)
+                return NotFound("Risk factor not found for this user.");
+
+            _context.PatientRiskFactors.Remove(risk);
+            await _context.SaveChangesAsync();
+            return Ok("Risk factor removed for user.");
+        }
+
+        /// <summary>
+        /// Elimina una comorbidità specifica per un utente.
+        /// </summary>
+        [HttpDelete("delete-user-comorbidity")]
+        public async Task<IActionResult> DeleteUserComorbidity([FromQuery] int userId, [FromQuery] string comorbidity, [FromQuery] string? startDate)
+        {
+            if (userId <= 0 || string.IsNullOrWhiteSpace(comorbidity) || string.IsNullOrWhiteSpace(startDate))
+                return BadRequest("Invalid parameters.");
+
+            if (!DateOnly.TryParse(startDate, out var parsedStartDate))
+                return BadRequest("Invalid startDate format. Use yyyy-MM-dd.");
+
+            var com = await _context.ClinicalComorbidities.FirstOrDefaultAsync(c => c.UserId == userId && c.Comorbidity == comorbidity && c.StartDate == parsedStartDate);
+            if (com == null)
+                return NotFound("Comorbidity not found for this user.");
+
+            _context.ClinicalComorbidities.Remove(com);
+            await _context.SaveChangesAsync();
+            return Ok("Comorbidity removed for user.");
+        }
     }
 }
