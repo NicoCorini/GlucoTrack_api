@@ -464,27 +464,34 @@ namespace GlucoTrack_api.Controllers
                 .ToListAsync();
 
             int scheduled = 0;
+            int performed = 0;
             foreach (var therapy in therapies)
             {
-                // Per ogni giorno in cui la terapia è attiva
                 var therapyStart = therapy.StartDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
                 var therapyEnd = therapy.EndDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
-                var from = therapyStart;
-                var to = therapy.EndDate == null || therapyEnd > DateOnly.FromDateTime(DateTime.UtcNow) ? DateOnly.FromDateTime(DateTime.UtcNow) : therapyEnd;
-                for (var day = from; day <= to; day = day.AddDays(1))
+                var to = therapy.EndDate == null || therapyEnd > DateOnly.FromDateTime(DateTime.UtcNow)
+                    ? DateOnly.FromDateTime(DateTime.UtcNow)
+                    : therapyEnd;
+                int daysCount = (to.DayNumber - therapyStart.DayNumber) + 1;
+                if (daysCount < 1) continue;
+
+                var msList = await _context.MedicationSchedules.Where(msc => msc.TherapyId == therapy.TherapyId).ToListAsync();
+                foreach (var ms in msList)
                 {
-                    // Conta tutte le MedicationSchedules della terapia e somma i DailyIntakes
-                    var msList = await _context.MedicationSchedules.Where(msc => msc.TherapyId == therapy.TherapyId).ToListAsync();
-                    foreach (var ms in msList)
-                    {
-                        scheduled += ms.DailyIntakes > 0 ? ms.DailyIntakes : 1; // fallback a 1 se non valorizzato
-                    }
+                    int daily = ms.DailyIntakes > 0 ? ms.DailyIntakes : 1;
+                    scheduled += daily * daysCount;
+
+                    // Conta solo le intake per questa schedule, nel periodo della terapia
+                    performed += await _context.MedicationIntakes
+                        .Where(mi =>
+                            mi.UserId == userId &&
+                            mi.MedicationScheduleId == ms.MedicationScheduleId &&
+                            mi.IntakeDateTime.Date >= therapyStart.ToDateTime(TimeOnly.MinValue).Date &&
+                            mi.IntakeDateTime.Date <= to.ToDateTime(TimeOnly.MaxValue).Date
+                        )
+                        .CountAsync();
                 }
             }
-            // Conta tutte le assunzioni effettive collegate a MedicationSchedule (dall'inizio)
-            var performed = await _context.MedicationIntakes
-                .Where(mi => mi.UserId == userId && mi.MedicationScheduleId != null)
-                .CountAsync();
             dto.TherapyAdherence = new TherapyAdherenceDto
             {
                 ScheduledIntakes = scheduled,
