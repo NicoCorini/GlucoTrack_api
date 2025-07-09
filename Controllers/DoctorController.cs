@@ -17,10 +17,130 @@ namespace GlucoTrack_api.Controllers
             _context = context;
         }
 
-        [HttpGet("dashboard")]
-        public IActionResult GetDoctorDashboard([FromQuery] int doctorId)
+        /// <summary>
+        /// Restituisce il riepilogo dashboard per il medico: pazienti "in linea", pazienti con media alta, alert glicemici aperti.
+        /// </summary>
+        [HttpGet("dashboard-summary")]
+        public async Task<ActionResult<DoctorDashboardSummaryDto>> GetDoctorDashboardSummary([FromQuery] int doctorId)
         {
-            return Ok("TBD");
+            if (doctorId <= 0)
+                return BadRequest("Invalid doctorId.");
+
+            // 1. Trova tutti i pazienti associati al medico (relazione PatientDoctors, attivi)
+            var patientIds = await _context.PatientDoctors
+                .Where(pd => pd.DoctorId == doctorId && (pd.EndDate == null || pd.EndDate > DateOnly.FromDateTime(DateTime.UtcNow)))
+                .Select(pd => pd.PatientId)
+                .Distinct()
+                .ToListAsync();
+
+            // 2. Recupera info base pazienti
+            var patients = await _context.Users
+                .Where(u => patientIds.Contains(u.UserId))
+                .Select(u => new { u.UserId, u.FirstName, u.LastName })
+                .ToListAsync();
+
+            // 3. Calcola media glicemica settimanale e trend per ogni paziente
+            var now = DateTime.UtcNow;
+            var lastWeekMonday = now.Date.AddDays(-(int)now.DayOfWeek + (int)DayOfWeek.Monday); // Lunedì di questa settimana
+            var prevWeekMonday = lastWeekMonday.AddDays(-7);
+
+            // Recupera tutte le misurazioni glicemiche delle ultime 2 settimane per questi pazienti
+            var glycemic = await _context.GlycemicMeasurements
+                .Where(g => patientIds.Contains(g.UserId) && g.MeasurementDateTime >= prevWeekMonday)
+                .ToListAsync();
+
+            var inLine = new List<DashboardPatientSummaryDto>();
+            var highAvg = new List<DashboardPatientSummaryDto>();
+
+            foreach (var p in patients)
+            {
+                var weekData = glycemic.Where(g => g.UserId == p.UserId && g.MeasurementDateTime.Date >= lastWeekMonday).ToList();
+                var prevWeekData = glycemic.Where(g => g.UserId == p.UserId && g.MeasurementDateTime.Date >= prevWeekMonday && g.MeasurementDateTime.Date < lastWeekMonday).ToList();
+                double avg = weekData.Any() ? weekData.Average(x => x.Value) : 0;
+                double prevAvg = prevWeekData.Any() ? prevWeekData.Average(x => x.Value) : 0;
+                string trend = "stable";
+                if (weekData.Any() && prevWeekData.Any())
+                {
+                    if (avg > prevAvg + 5) trend = "up";
+                    else if (avg < prevAvg - 5) trend = "down";
+                }
+
+                // Verifica se il paziente ha alert glicemici aperti
+                bool hasOpenGlyAlert = await _context.AlertRecipients
+                    .AnyAsync(ar => ar.RecipientUserId == p.UserId && ar.Alert.Status != "resolved" &&
+                        (ar.Alert.AlertType.Label == "CRITICAL_GLUCOSE" || ar.Alert.AlertType.Label == "VERY_HIGH_GLUCOSE" || ar.Alert.AlertType.Label == "HIGH_GLUCOSE"));
+
+                var dto = new DashboardPatientSummaryDto
+                {
+                    UserId = p.UserId,
+                    FirstName = p.FirstName ?? string.Empty,
+                    LastName = p.LastName ?? string.Empty,
+                    WeeklyAvgGlycemia = Math.Round(avg, 1),
+                    Trend = trend
+                };
+
+                if (!hasOpenGlyAlert && avg <= 180)
+                    inLine.Add(dto);
+                else if (avg > 180)
+                    highAvg.Add(dto);
+            }
+
+            // 4. Recupera tutti gli alert glicemici aperti dove il medico è destinatario
+            var openAlerts = await _context.AlertRecipients
+                .Where(ar => ar.RecipientUserId == doctorId && ar.Alert.Status != "resolved" &&
+                    (ar.Alert.AlertType.Label == "CRITICAL_GLUCOSE" || ar.Alert.AlertType.Label == "VERY_HIGH_GLUCOSE" || ar.Alert.AlertType.Label == "HIGH_GLUCOSE"))
+                .Include(ar => ar.Alert)
+                    .ThenInclude(a => a.AlertType)
+                .Include(ar => ar.Alert.User)
+                .OrderByDescending(ar => ar.Alert.CreatedAt)
+                .ToListAsync();
+
+            int critical = 0, severe = 0, mild = 0;
+            var alertDetails = new List<DashboardAlertDetailDto>();
+            foreach (var ar in openAlerts)
+            {
+                string level = ar.Alert.AlertType.Label switch
+                {
+                    "CRITICAL_GLUCOSE" => "CRITICAL",
+                    "VERY_HIGH_GLUCOSE" => "SEVERE",
+                    "HIGH_GLUCOSE" => "MILD",
+                    _ => ""
+                };
+                if (level == "CRITICAL") critical++;
+                else if (level == "SEVERE") severe++;
+                else if (level == "MILD") mild++;
+
+                alertDetails.Add(new DashboardAlertDetailDto
+                {
+                    AlertRecipientId = ar.AlertRecipientId,
+                    AlertId = ar.AlertId,
+                    PatientId = ar.Alert.UserId,
+                    PatientFirstName = ar.Alert.User?.FirstName ?? string.Empty,
+                    PatientLastName = ar.Alert.User?.LastName ?? string.Empty,
+                    Level = level,
+                    Message = ar.Alert.Message ?? string.Empty,
+                    CreatedAt = ar.Alert.CreatedAt ?? DateTime.MinValue,
+                    Status = ar.Alert.Status ?? string.Empty
+                });
+            }
+
+            var alertSummary = new DashboardAlertSummaryDto
+            {
+                TotalOpen = openAlerts.Count,
+                CriticalCount = critical,
+                SevereCount = severe,
+                MildCount = mild,
+                Alerts = alertDetails
+            };
+
+            var result = new DoctorDashboardSummaryDto
+            {
+                InLinePatients = inLine,
+                HighAvgGlucosePatients = highAvg,
+                GlycemiaAlerts = alertSummary
+            };
+
+            return Ok(result);
         }
 
         [HttpGet("recent-therapies")]

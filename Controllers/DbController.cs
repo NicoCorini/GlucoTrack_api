@@ -242,105 +242,179 @@ namespace GlucoTrack_api.Controllers
                 var endDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-1));
                 var random = new Random(42); // Seed for reproducibility
 
-                // Helper for glycemia values
+                // Helper for glycemia values (to trigger alerts)
+                // MODERATE: 160-219, SEVERE: 220-349, CRITICAL: >=350
                 int[] normalGly = { 95, 110, 120, 105, 100, 115 };
-                int[] mildHighGly = { 160, 170, 180 };
-                int[] highGly = { 220, 240 };
-                int[] criticalGly = { 350, 400 };
+                int[] moderateGly = { 165, 175, 200 };
+                int[] severeGly = { 225, 240, 300 };
+                int[] criticalGly = { 355, 400 };
 
-                // Marco Rossi (UserId=3): 6/day, tutti i giorni, valori normali
+                // Marco Rossi (UserId=3): 6/day, tutti i giorni, valori normali, ma ogni 10 giorni un valore MODERATE, ogni 20 giorni uno SEVERE, ogni 30 giorni uno CRITICAL
                 if (!await _context.GlycemicMeasurements.AnyAsync(g => g.UserId == 3))
                 {
                     var marcoGly = new List<GlycemicMeasurements>();
+                    var marcoAlerts = new List<(int userId, decimal value, DateTime dateTime)>();
                     for (var d = startDate; d <= endDate; d = d.AddDays(1))
                     {
                         for (int i = 0; i < 6; i++)
                         {
+                            int val = normalGly[i % normalGly.Length];
+                            if (d.Day % 30 == 0 && i == 0) val = criticalGly[(d.Day / 30) % criticalGly.Length];
+                            else if (d.Day % 20 == 0 && i == 1) val = severeGly[(d.Day / 20) % severeGly.Length];
+                            else if (d.Day % 10 == 0 && i == 2) val = moderateGly[(d.Day / 10) % moderateGly.Length];
+                            var dt = d.ToDateTime(TimeOnly.FromTimeSpan(TimeSpan.FromHours(7 + i * 2)));
                             marcoGly.Add(new GlycemicMeasurements
                             {
                                 UserId = 3,
-                                MeasurementDateTime = d.ToDateTime(TimeOnly.FromTimeSpan(TimeSpan.FromHours(7 + i * 2))),
-                                Value = (short)normalGly[i % normalGly.Length],
+                                MeasurementDateTime = dt,
+                                Value = (short)val,
                                 MeasurementTypeId = (i % 2 == 0) ? 1 : 2,
                                 MealTypeId = (i % 3) + 1
                             });
+                            // Logica alert sample (solo per valori fuori range)
+                            string? alertLevel = null;
+                            if (val < 60 || val > 300) alertLevel = "CRITICAL";
+                            else if ((val >= 60 && val < 70) || (val > 250 && val <= 300)) alertLevel = "SEVERE";
+                            else if ((val >= 70 && val < 80) || (val > 180 && val <= 250)) alertLevel = "MILD";
+                            if (alertLevel != null)
+                                marcoAlerts.Add((3, val, dt));
                         }
                     }
                     await _context.GlycemicMeasurements.AddRangeAsync(marcoGly);
                     await _context.SaveChangesAsync();
+                    // Crea alert sample
+                    foreach (var (userId, value, dateTime) in marcoAlerts)
+                    {
+                        string alertLevel = value < 60 || value > 300 ? "CRITICAL" : (value >= 60 && value < 70) || (value > 250 && value <= 300) ? "SEVERE" : "MILD";
+                        await GlucoTrack_api.Utils.AlertUtils.CreateGlycemiaAlertInternal(_context, userId, value, dateTime, alertLevel);
+                    }
                 }
 
-                // Laura Giuliani (UserId=4): 2 giorni con <6 logs, 1 giorno con critical glycemia
+                // Laura Giuliani (UserId=4): 2 giorni con <6 logs, 1 giorno con critical glycemia, ogni 15 giorni un valore SEVERE, ogni 7 giorni uno MODERATE
                 if (!await _context.GlycemicMeasurements.AnyAsync(g => g.UserId == 4))
                 {
                     var lauraGly = new List<GlycemicMeasurements>();
+                    var lauraAlerts = new List<(int userId, decimal value, DateTime dateTime)>();
                     for (var d = startDate; d <= endDate; d = d.AddDays(1))
                     {
                         int logs = 6;
                         if (d == new DateOnly(2025, 6, 10) || d == new DateOnly(2025, 6, 25)) logs = 3;
                         for (int i = 0; i < logs; i++)
                         {
+                            int val = normalGly[i % normalGly.Length];
+                            if (d == new DateOnly(2025, 6, 10) && i == 0) val = 400;
+                            else if (d == new DateOnly(2025, 6, 11) && i == 1) val = 240;
+                            else if (d == new DateOnly(2025, 6, 12) && i == 2) val = 170;
+                            else if (d.Day % 15 == 0 && i == 1) val = severeGly[(d.Day / 15) % severeGly.Length];
+                            else if (d.Day % 7 == 0 && i == 2) val = moderateGly[(d.Day / 7) % moderateGly.Length];
+                            var dt = d.ToDateTime(TimeOnly.FromTimeSpan(TimeSpan.FromHours(7 + i * 2)));
                             lauraGly.Add(new GlycemicMeasurements
                             {
                                 UserId = 4,
-                                MeasurementDateTime = d.ToDateTime(TimeOnly.FromTimeSpan(TimeSpan.FromHours(7 + i * 2))),
-                                Value = (short)((d == new DateOnly(2025, 6, 10) && i == 0) ? 400 : normalGly[i % normalGly.Length]),
+                                MeasurementDateTime = dt,
+                                Value = (short)val,
                                 MeasurementTypeId = (i % 2 == 0) ? 1 : 2,
                                 MealTypeId = (i % 3) + 1
                             });
+                            string? alertLevel = null;
+                            if (val < 60 || val > 300) alertLevel = "CRITICAL";
+                            else if ((val >= 60 && val < 70) || (val > 250 && val <= 300)) alertLevel = "SEVERE";
+                            else if ((val >= 70 && val < 80) || (val > 180 && val <= 250)) alertLevel = "MILD";
+                            if (alertLevel != null)
+                                lauraAlerts.Add((4, val, dt));
                         }
                     }
                     await _context.GlycemicMeasurements.AddRangeAsync(lauraGly);
                     await _context.SaveChangesAsync();
+                    foreach (var (userId, value, dateTime) in lauraAlerts)
+                    {
+                        string alertLevel = value < 60 || value > 300 ? "CRITICAL" : (value >= 60 && value < 70) || (value > 250 && value <= 300) ? "SEVERE" : "MILD";
+                        await GlucoTrack_api.Utils.AlertUtils.CreateGlycemiaAlertInternal(_context, userId, value, dateTime, alertLevel);
+                    }
                 }
 
-                // Francesco Bruno (UserId=5): 3 giorni consecutivi <6 logs, frequenti mild hyperglycemia
+                // Francesco Bruno (UserId=5): 3 giorni consecutivi <6 logs, frequenti MODERATE e SEVERE hyperglycemia
                 if (!await _context.GlycemicMeasurements.AnyAsync(g => g.UserId == 5))
                 {
                     var fraGly = new List<GlycemicMeasurements>();
+                    var fraAlerts = new List<(int userId, decimal value, DateTime dateTime)>();
                     for (var d = startDate; d <= endDate; d = d.AddDays(1))
                     {
                         int logs = 6;
                         if (d >= new DateOnly(2025, 6, 12) && d <= new DateOnly(2025, 6, 14)) logs = 4;
                         for (int i = 0; i < logs; i++)
                         {
-                            int val = (i == 0 && d.Day % 3 == 0) ? mildHighGly[random.Next(mildHighGly.Length)] : normalGly[i % normalGly.Length];
+                            int val = normalGly[i % normalGly.Length];
+                            if (d == new DateOnly(2025, 6, 15) && i == 0) val = 400;
+                            else if (d == new DateOnly(2025, 6, 16) && i == 1) val = 220;
+                            else if (d == new DateOnly(2025, 6, 17) && i == 2) val = 160;
+                            else if (i == 0 && d.Day % 4 == 0) val = moderateGly[random.Next(moderateGly.Length)];
+                            else if (i == 1 && d.Day % 8 == 0) val = severeGly[random.Next(severeGly.Length)];
+                            var dt = d.ToDateTime(TimeOnly.FromTimeSpan(TimeSpan.FromHours(7 + i * 2)));
                             fraGly.Add(new GlycemicMeasurements
                             {
                                 UserId = 5,
-                                MeasurementDateTime = d.ToDateTime(TimeOnly.FromTimeSpan(TimeSpan.FromHours(7 + i * 2))),
+                                MeasurementDateTime = dt,
                                 Value = (short)val,
                                 MeasurementTypeId = (i % 2 == 0) ? 1 : 2,
                                 MealTypeId = (i % 3) + 1
                             });
+                            string? alertLevel = null;
+                            if (val < 60 || val > 300) alertLevel = "CRITICAL";
+                            else if ((val >= 60 && val < 70) || (val > 250 && val <= 300)) alertLevel = "SEVERE";
+                            else if ((val >= 70 && val < 80) || (val > 180 && val <= 250)) alertLevel = "MILD";
+                            if (alertLevel != null)
+                                fraAlerts.Add((5, val, dt));
                         }
                     }
                     await _context.GlycemicMeasurements.AddRangeAsync(fraGly);
                     await _context.SaveChangesAsync();
+                    foreach (var (userId, value, dateTime) in fraAlerts)
+                    {
+                        string alertLevel = value < 60 || value > 300 ? "CRITICAL" : (value >= 60 && value < 70) || (value > 250 && value <= 300) ? "SEVERE" : "MILD";
+                        await GlucoTrack_api.Utils.AlertUtils.CreateGlycemiaAlertInternal(_context, userId, value, dateTime, alertLevel);
+                    }
                 }
 
-                // Giulia Neri (UserId=6): 1 giorno senza log, 2 giorni con missed intakes, 1 giorno severe glycemia
+                // Giulia Neri (UserId=6): 1 giorno senza log, 2 giorni con missed intakes, 1 giorno SEVERE glycemia, ogni 9 giorni MODERATE
                 if (!await _context.GlycemicMeasurements.AnyAsync(g => g.UserId == 6))
                 {
                     var giuliaGly = new List<GlycemicMeasurements>();
+                    var giuliaAlerts = new List<(int userId, decimal value, DateTime dateTime)>();
                     for (var d = startDate; d <= endDate; d = d.AddDays(1))
                     {
                         if (d == new DateOnly(2025, 6, 18)) continue; // nessun log
                         for (int i = 0; i < 6; i++)
                         {
-                            int val = (d == new DateOnly(2025, 7, 5) && i == 2) ? highGly[1] : normalGly[i % normalGly.Length];
+                            int val = normalGly[i % normalGly.Length];
+                            if (d == new DateOnly(2025, 7, 5) && i == 2) val = 240;
+                            else if (d == new DateOnly(2025, 7, 6) && i == 0) val = 350;
+                            else if (d == new DateOnly(2025, 7, 7) && i == 1) val = 180;
+                            else if (d.Day % 9 == 0 && i == 3) val = moderateGly[(d.Day / 9) % moderateGly.Length];
+                            var dt = d.ToDateTime(TimeOnly.FromTimeSpan(TimeSpan.FromHours(7 + i * 2)));
                             giuliaGly.Add(new GlycemicMeasurements
                             {
                                 UserId = 6,
-                                MeasurementDateTime = d.ToDateTime(TimeOnly.FromTimeSpan(TimeSpan.FromHours(7 + i * 2))),
+                                MeasurementDateTime = dt,
                                 Value = (short)val,
                                 MeasurementTypeId = (i % 2 == 0) ? 1 : 2,
                                 MealTypeId = (i % 3) + 1
                             });
+                            string? alertLevel = null;
+                            if (val < 60 || val > 300) alertLevel = "CRITICAL";
+                            else if ((val >= 60 && val < 70) || (val > 250 && val <= 300)) alertLevel = "SEVERE";
+                            else if ((val >= 70 && val < 80) || (val > 180 && val <= 250)) alertLevel = "MILD";
+                            if (alertLevel != null)
+                                giuliaAlerts.Add((6, val, dt));
                         }
                     }
                     await _context.GlycemicMeasurements.AddRangeAsync(giuliaGly);
                     await _context.SaveChangesAsync();
+                    foreach (var (userId, value, dateTime) in giuliaAlerts)
+                    {
+                        string alertLevel = value < 60 || value > 300 ? "CRITICAL" : (value >= 60 && value < 70) || (value > 250 && value <= 300) ? "SEVERE" : "MILD";
+                        await GlucoTrack_api.Utils.AlertUtils.CreateGlycemiaAlertInternal(_context, userId, value, dateTime, alertLevel);
+                    }
                 }
 
                 // MedicationIntakes: Marco (tutti ok), Laura (1 missed), Francesco (tutti ok), Giulia (2 missed)
