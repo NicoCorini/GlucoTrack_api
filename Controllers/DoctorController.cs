@@ -29,7 +29,7 @@ namespace GlucoTrack_api.Controllers
 
             // Solo terapie attive (EndDate == null)
             var recentTherapiesRaw = await _context.Therapies
-                .Where(t => t.DoctorId == doctorId && t.EndDate == null)
+                .Where(t => t.DoctorId == doctorId)
                 .OrderByDescending(t => t.CreatedAt)
                 .Take(10)
                 .ToListAsync();
@@ -49,10 +49,10 @@ namespace GlucoTrack_api.Controllers
                     .Select(ms => new RecentMedicationScheduleDto
                     {
                         MedicationScheduleId = ms.MedicationScheduleId,
-                        MedicationName = ms.MedicationName ?? string.Empty,
-                        ExpectedQuantity = (double)ms.ExpectedQuantity,
-                        ExpectedUnit = ms.ExpectedUnit ?? string.Empty,
-                        ScheduledTime = ms.ScheduledTime.ToString("HH:mm")
+                        MedicationName = ms.MedicationName,
+                        Quantity = ms.Quantity,
+                        Unit = ms.Unit,
+                        DailyIntakes = ms.DailyIntakes
                     })
                     .ToList()
             }).ToList();
@@ -114,16 +114,6 @@ namespace GlucoTrack_api.Controllers
 
             // Pagination
             var result = await users
-                .Select(u => new Users
-                {
-                    UserId = u.UserId,
-                    FirstName = u.FirstName ?? string.Empty,
-                    LastName = u.LastName ?? string.Empty,
-                    Email = u.Email ?? string.Empty,
-                    BirthDate = u.BirthDate ?? today,
-                    Gender = u.Gender ?? string.Empty,
-                    // ...altre proprietà se necessario...
-                })
                 .Skip(page * 10)
                 .Take(10)
                 .ToListAsync();
@@ -204,9 +194,9 @@ namespace GlucoTrack_api.Controllers
                         {
                             TherapyId = newTherapy.TherapyId,
                             MedicationName = msDto.MedicationName,
-                            ExpectedQuantity = msDto.ExpectedQuantity,
-                            ExpectedUnit = msDto.ExpectedUnit,
-                            ScheduledTime = msDto.ScheduledTime
+                            Quantity = msDto.Quantity,
+                            Unit = msDto.Unit,
+                            DailyIntakes = msDto.DailyIntakes
                         };
                         _context.MedicationSchedules.Add(ms);
                     }
@@ -237,9 +227,9 @@ namespace GlucoTrack_api.Controllers
                         {
                             TherapyId = therapyToAdd.TherapyId,
                             MedicationName = msDto.MedicationName,
-                            ExpectedQuantity = msDto.ExpectedQuantity,
-                            ExpectedUnit = msDto.ExpectedUnit,
-                            ScheduledTime = msDto.ScheduledTime
+                            Quantity = msDto.Quantity,
+                            Unit = msDto.Unit,
+                            DailyIntakes = msDto.DailyIntakes
                         };
                         _context.MedicationSchedules.Add(ms);
                     }
@@ -278,9 +268,9 @@ namespace GlucoTrack_api.Controllers
                         .Select(ms => new
                         {
                             ms.MedicationName,
-                            ms.ExpectedQuantity,
-                            ms.ExpectedUnit,
-                            ms.ScheduledTime
+                            ms.Quantity,
+                            ms.Unit,
+                            ms.DailyIntakes
                         })
                         .ToList(),
                     Patient = _context.Users
@@ -467,42 +457,46 @@ namespace GlucoTrack_api.Controllers
                 };
             }
 
-            // Adesione terapia: % assunzioni programmate vs effettive (ultimi 30 giorni)
-            var lastMonth = now.AddDays(-30);
-            // Conta solo le MedicationSchedules di terapie attive nel periodo (StartDate <= giorno <= EndDate/null)
+            // Adesione terapia: % assunzioni programmate vs effettive (dall'inizio)
+            // Prendi tutte le terapie del paziente (senza filtro temporale)
             var therapies = await _context.Therapies
-                .Where(t => t.UserId == userId && t.StartDate <= DateOnly.FromDateTime(now) && (t.EndDate == null || t.EndDate >= DateOnly.FromDateTime(lastMonth)))
+                .Where(t => t.UserId == userId)
                 .ToListAsync();
 
             int scheduled = 0;
             foreach (var therapy in therapies)
             {
-                // Per ogni giorno in cui la terapia è attiva nell'ultimo mese
-                var therapyStart = therapy.StartDate ?? DateOnly.FromDateTime(now);
-                var therapyEnd = therapy.EndDate ?? DateOnly.FromDateTime(now);
-                var from = therapyStart > DateOnly.FromDateTime(lastMonth) ? therapyStart : DateOnly.FromDateTime(lastMonth);
-                var to = therapy.EndDate == null || therapyEnd > DateOnly.FromDateTime(now) ? DateOnly.FromDateTime(now) : therapyEnd;
+                // Per ogni giorno in cui la terapia è attiva
+                var therapyStart = therapy.StartDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+                var therapyEnd = therapy.EndDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+                var from = therapyStart;
+                var to = therapy.EndDate == null || therapyEnd > DateOnly.FromDateTime(DateTime.UtcNow) ? DateOnly.FromDateTime(DateTime.UtcNow) : therapyEnd;
                 for (var day = from; day <= to; day = day.AddDays(1))
                 {
-                    // Ogni giorno, conta tutte le MedicationSchedules della terapia
-                    var ms = await _context.MedicationSchedules.Where(msc => msc.TherapyId == therapy.TherapyId).ToListAsync();
-                    scheduled += ms.Count;
+                    // Conta tutte le MedicationSchedules della terapia e somma i DailyIntakes
+                    var msList = await _context.MedicationSchedules.Where(msc => msc.TherapyId == therapy.TherapyId).ToListAsync();
+                    foreach (var ms in msList)
+                    {
+                        scheduled += ms.DailyIntakes > 0 ? ms.DailyIntakes : 1; // fallback a 1 se non valorizzato
+                    }
                 }
             }
+            // Conta tutte le assunzioni effettive collegate a MedicationSchedule (dall'inizio)
             var performed = await _context.MedicationIntakes
-                .Where(mi => mi.UserId == userId && mi.IntakeDateTime >= lastMonth && mi.MedicationScheduleId != null)
+                .Where(mi => mi.UserId == userId && mi.MedicationScheduleId != null)
                 .CountAsync();
-            dto.TherapyAdherence = new DTOs.TherapyAdherenceDto
+            dto.TherapyAdherence = new TherapyAdherenceDto
             {
                 ScheduledIntakes = scheduled,
                 PerformedIntakes = performed,
                 AdherencePercent = scheduled > 0 ? Math.Round(100.0 * performed / scheduled, 1) : 0
             };
 
-            // Sintomi recenti (ultimi 30 giorni)
+            // Ultimi 10 sintomi
             dto.RecentSymptoms = await _context.Symptoms
-                .Where(s => s.UserId == userId && s.OccurredAt >= lastMonth)
+                .Where(s => s.UserId == userId)
                 .OrderByDescending(s => s.OccurredAt)
+                .Take(10)
                 .Select(s => new DTOs.SymptomDto
                 {
                     Description = s.Description ?? string.Empty,
@@ -510,10 +504,11 @@ namespace GlucoTrack_api.Controllers
                 })
                 .ToListAsync();
 
-            // Alert clinici recenti (ultimi 30 giorni)
+            // Ultimi 10 alert clinici
             dto.RecentAlerts = await _context.AlertRecipients
-                .Where(ar => ar.RecipientUserId == userId && ar.Alert.CreatedAt >= lastMonth)
+                .Where(ar => ar.RecipientUserId == userId)
                 .OrderByDescending(ar => ar.Alert.CreatedAt)
+                .Take(10)
                 .Select(ar => new DTOs.AlertDto
                 {
                     Type = ar.Alert.AlertType.Label,
@@ -542,7 +537,7 @@ namespace GlucoTrack_api.Controllers
 
             // Assunzioni farmaci extra-terapia recenti (ultimi 30 giorni)
             dto.RecentExtraMedicationIntakes = await _context.MedicationIntakes
-                .Where(mi => mi.UserId == userId && mi.IntakeDateTime >= lastMonth && mi.MedicationScheduleId == null)
+                .Where(mi => mi.UserId == userId && mi.MedicationScheduleId == null)
                 .OrderByDescending(mi => mi.IntakeDateTime)
                 .Select(mi => new DTOs.ExtraMedicationIntakeDto
                 {

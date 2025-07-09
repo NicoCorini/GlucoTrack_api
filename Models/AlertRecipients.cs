@@ -20,6 +20,9 @@ public partial class AlertRecipients
     [Column(TypeName = "datetime")]
     public DateTime? ReadAt { get; set; }
 
+    [Column(TypeName = "datetime")]
+    public DateTime? NotifiedAt { get; set; }
+
     [ForeignKey("AlertId")]
     [InverseProperty("AlertRecipients")]
     public virtual Alerts Alert { get; set; } = null!;

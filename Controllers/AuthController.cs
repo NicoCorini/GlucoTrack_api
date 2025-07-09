@@ -102,15 +102,16 @@ namespace GlucoTrack_api.Controllers
                 .Select(t => new TherapyWithSchedulesResponseDto
                 {
                     TherapyId = t.TherapyId,
-                    Instructions = t.Instructions,
+                    Title = t.Title ?? string.Empty,
+                    Instructions = t.Instructions ?? string.Empty,
                     StartDate = t.StartDate?.ToDateTime(TimeOnly.MinValue),
                     EndDate = t.EndDate?.ToDateTime(TimeOnly.MinValue),
                     MedicationSchedules = t.MedicationSchedules.Select(ms => new MedicationScheduleDto
                     {
                         MedicationName = ms.MedicationName,
-                        ExpectedQuantity = ms.ExpectedQuantity,
-                        ExpectedUnit = ms.ExpectedUnit,
-                        ScheduledTime = ms.ScheduledTime
+                        Quantity = ms.Quantity,
+                        Unit = ms.Unit,
+                        DailyIntakes = ms.DailyIntakes
                     }).ToList()
                 }).ToList();
 

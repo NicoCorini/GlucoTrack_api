@@ -15,8 +15,7 @@ public partial class Therapies
 
     public int UserId { get; set; }
 
-    [StringLength(255)]
-    [Unicode(false)]
+    [Column(TypeName = "text")]
     public string Title { get; set; } = null!;
 
     [Column(TypeName = "text")]

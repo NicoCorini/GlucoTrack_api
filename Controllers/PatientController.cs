@@ -294,7 +294,7 @@ namespace GlucoTrack_api.Controllers
                 {
                     TherapyId = t.TherapyId,
                     Title = t.Title,
-                    Instructions = t.Instructions,
+                    Instructions = t.Instructions ?? string.Empty,
                     StartDate = t.StartDate.HasValue ? t.StartDate.Value.ToDateTime(TimeOnly.MinValue) : null,
                     EndDate = t.EndDate.HasValue ? t.EndDate.Value.ToDateTime(TimeOnly.MinValue) : null,
                     MedicationSchedules = _context.MedicationSchedules
@@ -303,9 +303,9 @@ namespace GlucoTrack_api.Controllers
                         {
                             MedicationScheduleId = ms.MedicationScheduleId,
                             MedicationName = ms.MedicationName,
-                            ExpectedQuantity = ms.ExpectedQuantity,
-                            ExpectedUnit = ms.ExpectedUnit,
-                            ScheduledTime = ms.ScheduledTime
+                            Quantity = ms.Quantity,
+                            Unit = ms.Unit,
+                            DailyIntakes = ms.DailyIntakes
                         }).ToList()
                 }).ToListAsync();
             if (therapies == null || !therapies.Any())

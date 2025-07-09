@@ -17,14 +17,14 @@ public partial class MedicationSchedules
     [Unicode(false)]
     public string MedicationName { get; set; } = null!;
 
+    public int DailyIntakes { get; set; }
+
     [Column(TypeName = "numeric(8, 2)")]
-    public decimal ExpectedQuantity { get; set; }
+    public decimal Quantity { get; set; }
 
     [StringLength(10)]
     [Unicode(false)]
-    public string ExpectedUnit { get; set; } = null!;
-
-    public TimeOnly ScheduledTime { get; set; }
+    public string Unit { get; set; } = null!;
 
     [InverseProperty("MedicationSchedule")]
     public virtual ICollection<MedicationIntakes> MedicationIntakes { get; set; } = new List<MedicationIntakes>();

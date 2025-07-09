@@ -20,8 +20,8 @@ namespace GlucoTrack_api.DTOs
     {
         public int MedicationScheduleId { get; set; }
         public string MedicationName { get; set; } = string.Empty;
-        public double ExpectedQuantity { get; set; }
-        public string ExpectedUnit { get; set; } = string.Empty;
-        public string ScheduledTime { get; set; } = string.Empty;
+        public decimal Quantity { get; set; }
+        public string Unit { get; set; } = string.Empty;
+        public int DailyIntakes { get; set; }
     }
 }

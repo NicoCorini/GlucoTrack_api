@@ -15,11 +15,27 @@ public partial class Alerts
 
     public int UserId { get; set; }
 
-    [Column(TypeName = "text")]
+    [StringLength(255)]
+    [Unicode(false)]
     public string Message { get; set; } = null!;
 
     [Column(TypeName = "datetime")]
     public DateTime? CreatedAt { get; set; }
+
+    public DateOnly? ReferenceDate { get; set; }
+
+    [StringLength(50)]
+    [Unicode(false)]
+    public string? ReferencePeriod { get; set; }
+
+    public int? ReferenceObjectId { get; set; }
+
+    [StringLength(20)]
+    [Unicode(false)]
+    public string Status { get; set; } = null!;
+
+    [Column(TypeName = "datetime")]
+    public DateTime? ResolvedAt { get; set; }
 
     [InverseProperty("Alert")]
     public virtual ICollection<AlertRecipients> AlertRecipients { get; set; } = new List<AlertRecipients>();
