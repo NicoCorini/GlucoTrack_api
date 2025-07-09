@@ -514,13 +514,31 @@ namespace GlucoTrack_api.Controllers
             // Ultimi 10 alert clinici
             dto.RecentAlerts = await _context.AlertRecipients
                 .Where(ar => ar.RecipientUserId == userId)
+                .Include(ar => ar.Alert)
+                    .ThenInclude(a => a.AlertType)
                 .OrderByDescending(ar => ar.Alert.CreatedAt)
                 .Take(10)
                 .Select(ar => new DTOs.AlertDto
                 {
-                    Type = ar.Alert.AlertType.Label,
-                    Message = ar.Alert.Message,
-                    CreatedAt = ar.Alert.CreatedAt ?? DateTime.MinValue
+                    AlertRecipientId = ar.AlertRecipientId,
+                    AlertId = ar.AlertId,
+                    RecipientUserId = ar.RecipientUserId,
+                    UserId = ar.Alert.UserId,
+                    IsRead = ar.IsRead,
+                    ReadAt = ar.ReadAt,
+                    NotifiedAt = ar.NotifiedAt,
+                    Message = ar.Alert.Message ?? string.Empty,
+                    CreatedAt = ar.Alert.CreatedAt,
+                    Status = ar.Alert.Status ?? string.Empty,
+                    ReferenceDate = ar.Alert.ReferenceDate,
+                    ReferencePeriod = ar.Alert.ReferencePeriod,
+                    ReferenceObjectId = ar.Alert.ReferenceObjectId,
+                    ResolvedAt = ar.Alert.ResolvedAt,
+                    AlertTypeId = ar.Alert.AlertTypeId,
+                    AlertTypeLabel = ar.Alert.AlertType.Label ?? string.Empty,
+                    AlertTypeDescription = ar.Alert.AlertType.Description,
+                    UserFirstName = ar.Alert.User.FirstName,
+                    UserLastName = ar.Alert.User.LastName
                 })
                 .ToListAsync();
 

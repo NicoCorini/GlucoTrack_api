@@ -67,13 +67,6 @@ public class SymptomDto
     public DateTime OccurredAt { get; set; }
 }
 
-public class AlertDto
-{
-    public string Type { get; set; } = string.Empty;
-    public string Message { get; set; } = string.Empty;
-    public DateTime CreatedAt { get; set; }
-}
-
 public class ExtraMedicationIntakeDto
 {
     public string MedicationName { get; set; } = string.Empty;
