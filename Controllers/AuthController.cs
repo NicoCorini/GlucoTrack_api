@@ -16,6 +16,9 @@ namespace GlucoTrack_api.Controllers
             _context = context;
         }
 
+        /// <summary>
+        /// Authenticates a user by email or username and password. Updates last access on success.
+        /// </summary>
         [HttpPost("login")]
         public async Task<ActionResult<LoginResponseDto>> Login([FromBody] LoginRequestDto request)
         {
@@ -47,6 +50,9 @@ namespace GlucoTrack_api.Controllers
 
         }
 
+        /// <summary>
+        /// Logs out the user. No real session management; always returns 200 OK.
+        /// </summary>
         [HttpPost("logout")]
         public IActionResult Logout()
         {
@@ -55,13 +61,16 @@ namespace GlucoTrack_api.Controllers
         }
 
 
+        /// <summary>
+        /// Returns detailed user information, including demographics, current doctor, risk factors, comorbidities, and active therapies with medication schedules.
+        /// </summary>
         [HttpGet("info")]
         public async Task<ActionResult<UserInfoResponseDto>> GetUserInfo([FromQuery] int userId)
         {
             if (userId <= 0)
                 return BadRequest("Invalid user ID.");
 
-            // Carica utente con navigation properties corrette
+            // Load user with correct navigation properties
             var nowDateOnly = DateOnly.FromDateTime(DateTime.Now);
             var user = await _context.Users
                 .Include(u => u.PatientDoctorsPatient.Where(pd => pd.EndDate == null))
@@ -76,10 +85,10 @@ namespace GlucoTrack_api.Controllers
             if (user == null)
                 return NotFound("User not found.");
 
-            // Medico attuale
+            // Current doctor
             var currentDoctor = user.PatientDoctorsPatient.FirstOrDefault()?.Doctor;
 
-            // Fattori rischio
+            // Risk factors
             var riskFactors = user.PatientRiskFactors
                 .Select(prf => new RiskFactorDto
                 {
@@ -88,7 +97,7 @@ namespace GlucoTrack_api.Controllers
                     Description = prf.RiskFactor.Description
                 }).ToList();
 
-            // Comorbidità (solo stringa, come da model)
+            // Comorbidities (string only, as per model)
             var comorbidities = user.ClinicalComorbidities
                 .Select(pc => new ComorbidityDto
                 {
@@ -97,7 +106,7 @@ namespace GlucoTrack_api.Controllers
                     EndDate = pc.EndDate
                 }).ToList();
 
-            // Terapie attive con medication schedule
+            // Active therapies with medication schedules
             var therapies = user.TherapiesUser
                 .Select(t => new TherapyWithSchedulesResponseDto
                 {

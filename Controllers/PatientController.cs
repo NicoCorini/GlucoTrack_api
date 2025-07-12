@@ -18,6 +18,9 @@ namespace GlucoTrack_api.Controllers
             _context = context;
         }
 
+        /// <summary>
+        /// Returns the average glycemic value for each of the last 7 days for the specified user.
+        /// </summary>
         [HttpGet("glycemic-resume")]
         public async Task<ActionResult<List<GlycemicResumeResponseDto>>> GetGlycemicResume([FromQuery] int userId)
         {
@@ -42,6 +45,9 @@ namespace GlucoTrack_api.Controllers
             return Ok(result);
         }
 
+        /// <summary>
+        /// Returns a daily summary for the specified user and date, including glycemic measurements, medication intakes, symptoms, and reported conditions active on that day.
+        /// </summary>
         [HttpGet("daily-resume")]
         public async Task<ActionResult<DailyResumeResponseDto>> GetDailyResume([FromQuery] int userId, [FromQuery] DateOnly date)
         {
@@ -57,7 +63,7 @@ namespace GlucoTrack_api.Controllers
                 .Where(s => s.UserId == userId && DateOnly.FromDateTime(s.OccurredAt) == date)
                 .ToListAsync();
 
-            // Reported conditions: attive in quel giorno (StartDate <= fine giornata e (EndDate >= inizio giornata o EndDate == null))
+            // Reported conditions: active on that day (StartDate <= end of day and (EndDate >= start of day or EndDate == null))
             var dayStart = date.ToDateTime(TimeOnly.MinValue);
             var dayEnd = date.ToDateTime(TimeOnly.MaxValue);
             var reportedConditions = await _context.ReportedConditions
@@ -76,6 +82,9 @@ namespace GlucoTrack_api.Controllers
             return Ok(response);
         }
 
+        /// <summary>
+        /// Returns a specific glycemic measurement by its ID.
+        /// </summary>
         [HttpGet("glycemic-measurement")]
         public async Task<ActionResult<GlycemicMeasurements>> GetGlycemicMeasurement([FromQuery] int glycemicMeasurementId)
         {
@@ -90,6 +99,9 @@ namespace GlucoTrack_api.Controllers
             return Ok(entity);
         }
 
+        /// <summary>
+        /// Adds a new glycemic log or updates an existing one for the specified user.
+        /// </summary>
         [HttpPost("add-glycemic-log")]
         public async Task<ActionResult> AddOrUpdateGlycemicLog([FromBody] AddGlycemicLogRequestDto glycemicLog)
         {
@@ -99,7 +111,7 @@ namespace GlucoTrack_api.Controllers
             {
                 if (glycemicLog.GlycemicMeasurementId > 0)
                 {
-                    // UPDATE
+                    // Update
                     var entity = await _context.GlycemicMeasurements
                         .FirstOrDefaultAsync(g => g.GlycemicMeasurementId == glycemicLog.GlycemicMeasurementId);
                     if (entity == null)
@@ -116,7 +128,7 @@ namespace GlucoTrack_api.Controllers
                 }
                 else
                 {
-                    // INSERT
+                    // Insert
                     var entity = new GlycemicMeasurements
                     {
                         UserId = glycemicLog.UserId,
@@ -137,6 +149,9 @@ namespace GlucoTrack_api.Controllers
             }
         }
 
+        /// <summary>
+        /// Deletes a glycemic measurement by its ID.
+        /// </summary>
         [HttpDelete("delete-glycemic-measurement")]
         public async Task<IActionResult> DeleteGlycemicMeasurement([FromQuery] int glycemicMeasurementId)
         {
@@ -152,6 +167,9 @@ namespace GlucoTrack_api.Controllers
             return Ok("Glycemic measurement deleted successfully.");
         }
 
+        /// <summary>
+        /// Returns a specific symptom log by its ID.
+        /// </summary>
         [HttpGet("symptom-log")]
         public async Task<ActionResult<GlycemicMeasurements>> GetSymtptomLog([FromQuery] int symptomId)
         {
@@ -166,6 +184,9 @@ namespace GlucoTrack_api.Controllers
             return Ok(entity);
         }
 
+        /// <summary>
+        /// Adds a new symptom log or updates an existing one for the specified user.
+        /// </summary>
         [HttpPost("add-symptom-log")]
         public async Task<ActionResult> AddOrUpdateSymptomLog([FromBody] AddSymptomLogRequestDto symptomLog)
         {
@@ -204,6 +225,9 @@ namespace GlucoTrack_api.Controllers
             }
         }
 
+        /// <summary>
+        /// Deletes a symptom log by its ID.
+        /// </summary>
         [HttpDelete("delete-symptom-log")]
         public async Task<IActionResult> DeleteSymptomLog([FromQuery] int symptomId)
         {
@@ -217,6 +241,9 @@ namespace GlucoTrack_api.Controllers
             return Ok("Symptom log deleted successfully.");
         }
 
+        /// <summary>
+        /// Adds a new medication log or updates an existing one for the specified user.
+        /// </summary>
         [HttpPost("add-medication-log")]
         public async Task<ActionResult> AddOrUpdateMedicationLog([FromBody] AddMedicationLogRequestDto medicationLog)
         {
@@ -226,7 +253,7 @@ namespace GlucoTrack_api.Controllers
             {
                 if (medicationLog.MedicationIntakeId > 0)
                 {
-                    // UPDATE
+                    // Update
                     var entity = await _context.MedicationIntakes
                         .FirstOrDefaultAsync(m => m.MedicationIntakeId == medicationLog.MedicationIntakeId);
                     if (entity == null)
@@ -245,7 +272,7 @@ namespace GlucoTrack_api.Controllers
                 }
                 else
                 {
-                    // INSERT
+                    // Insert
                     var entity = new MedicationIntakes
                     {
                         UserId = medicationLog.UserId,
@@ -267,6 +294,9 @@ namespace GlucoTrack_api.Controllers
             }
         }
 
+        /// <summary>
+        /// Deletes a medication log by its ID.
+        /// </summary>
         [HttpDelete("delete-medication-log")]
         public async Task<IActionResult> DeleteMedicationLog([FromQuery] int medicationIntakeId)
         {
@@ -280,6 +310,9 @@ namespace GlucoTrack_api.Controllers
             return Ok("Medication log deleted successfully.");
         }
 
+        /// <summary>
+        /// Returns all active therapies and their medication schedules for the specified patient.
+        /// </summary>
         [HttpGet("therapies")]
         public async Task<ActionResult<List<TherapyWithSchedulesResponseDto>>> GetTherapiesWithSchedules([FromQuery] int userId)
         {
@@ -317,6 +350,9 @@ namespace GlucoTrack_api.Controllers
         // ReportedConditions CRUD
         // =============================
 
+        /// <summary>
+        /// Adds a new reported condition or updates an existing one for the specified user.
+        /// </summary>
         [HttpPost("add-reported-condition")]
         public async Task<ActionResult> AddOrUpdateReportedCondition([FromBody] AddReportedConditionRequestDto conditionDto)
         {
@@ -326,7 +362,7 @@ namespace GlucoTrack_api.Controllers
             {
                 if (conditionDto.ConditionId.HasValue && conditionDto.ConditionId > 0)
                 {
-                    // UPDATE
+                    // Update
                     var entity = await _context.ReportedConditions.FirstOrDefaultAsync(c => c.ConditionId == conditionDto.ConditionId);
                     if (entity == null)
                         return NotFound("Reported condition not found.");
@@ -338,7 +374,7 @@ namespace GlucoTrack_api.Controllers
                 }
                 else
                 {
-                    // INSERT
+                    // Insert
                     var entity = new ReportedConditions
                     {
                         UserId = conditionDto.UserId,
@@ -357,6 +393,9 @@ namespace GlucoTrack_api.Controllers
             }
         }
 
+        /// <summary>
+        /// Deletes a reported condition by its ID.
+        /// </summary>
         [HttpDelete("delete-reported-condition")]
         public async Task<IActionResult> DeleteReportedCondition([FromQuery] int conditionId)
         {

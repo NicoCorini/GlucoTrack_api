@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using GlucoTrack_api.Models;
 using GlucoTrack_api.Data;
+using GlucoTrack_api.Utils;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Log della stringa di connessione effettiva
+// Database connection string
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
@@ -21,6 +22,9 @@ builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Registrazione del ChangeLogService
+builder.Services.AddScoped<ChangeLogService>();
 
 var app = builder.Build();
 

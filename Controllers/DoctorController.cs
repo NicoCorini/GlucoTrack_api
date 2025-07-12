@@ -3,6 +3,7 @@ using GlucoTrack_api.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using GlucoTrack_api.DTOs;
+using GlucoTrack_api.Utils;
 
 namespace GlucoTrack_api.Controllers
 {
@@ -11,14 +12,21 @@ namespace GlucoTrack_api.Controllers
     public class DoctorController : Controller
     {
         private readonly GlucoTrackDBContext _context;
+        private readonly ChangeLogService _changeLogService;
 
-        public DoctorController(GlucoTrackDBContext context)
+        public DoctorController(GlucoTrackDBContext context, ChangeLogService changeLogService)
         {
             _context = context;
+            _changeLogService = changeLogService;
         }
 
         /// <summary>
-        /// Restituisce il riepilogo dashboard per il medico: pazienti "in linea", pazienti con media alta, alert glicemici aperti.
+        /// Returns a dashboard summary for the doctor, including:
+        /// - Patients who are currently "in line" (within glycemic target and no open glycemic alerts)
+        /// - Patients with high weekly average glycemia
+        /// - All open glycemic alerts where the doctor is a recipient
+        ///
+        /// The summary includes patient trends, alert counts by severity, and details for each open alert.
         /// </summary>
         [HttpGet("dashboard-summary")]
         public async Task<ActionResult<DoctorDashboardSummaryDto>> GetDoctorDashboardSummary([FromQuery] int doctorId)
@@ -26,25 +34,25 @@ namespace GlucoTrack_api.Controllers
             if (doctorId <= 0)
                 return BadRequest("Invalid doctorId.");
 
-            // 1. Trova tutti i pazienti associati al medico (relazione PatientDoctors, attivi)
+            // 1. Find all patients associated with the doctor (PatientDoctors relationship, active)
             var patientIds = await _context.PatientDoctors
                 .Where(pd => pd.DoctorId == doctorId && (pd.EndDate == null || pd.EndDate > DateOnly.FromDateTime(DateTime.UtcNow)))
                 .Select(pd => pd.PatientId)
                 .Distinct()
                 .ToListAsync();
 
-            // 2. Recupera info base pazienti
+            // 2. Retrieve basic patient info
             var patients = await _context.Users
                 .Where(u => patientIds.Contains(u.UserId))
                 .Select(u => new { u.UserId, u.FirstName, u.LastName })
                 .ToListAsync();
 
-            // 3. Calcola media glicemica settimanale e trend per ogni paziente
+            // 3. Calculate weekly glycemic average and trend for each patient
             var now = DateTime.UtcNow;
-            var lastWeekMonday = now.Date.AddDays(-(int)now.DayOfWeek + (int)DayOfWeek.Monday); // Lunedì di questa settimana
+            var lastWeekMonday = now.Date.AddDays(-(int)now.DayOfWeek + (int)DayOfWeek.Monday); // Monday of this week
             var prevWeekMonday = lastWeekMonday.AddDays(-7);
 
-            // Recupera tutte le misurazioni glicemiche delle ultime 2 settimane per questi pazienti
+            // Retrieve all glycemic measurements from the last 2 weeks for these patients
             var glycemic = await _context.GlycemicMeasurements
                 .Where(g => patientIds.Contains(g.UserId) && g.MeasurementDateTime >= prevWeekMonday)
                 .ToListAsync();
@@ -65,7 +73,7 @@ namespace GlucoTrack_api.Controllers
                     else if (avg < prevAvg - 5) trend = "down";
                 }
 
-                // Verifica se il paziente ha alert glicemici aperti
+                // Check if the patient has open glycemic alerts
                 bool hasOpenGlyAlert = await _context.AlertRecipients
                     .AnyAsync(ar => ar.RecipientUserId == p.UserId && ar.Alert.Status != "resolved" &&
                         (ar.Alert.AlertType.Label == "CRITICAL_GLUCOSE" || ar.Alert.AlertType.Label == "VERY_HIGH_GLUCOSE" || ar.Alert.AlertType.Label == "HIGH_GLUCOSE"));
@@ -85,7 +93,7 @@ namespace GlucoTrack_api.Controllers
                     highAvg.Add(dto);
             }
 
-            // 4. Recupera tutti gli alert glicemici aperti dove il medico è destinatario
+            // 4. Retrieve all open glycemic alerts where the doctor is the recipient
             var openAlerts = await _context.AlertRecipients
                 .Where(ar => ar.RecipientUserId == doctorId && ar.Alert.Status != "resolved" &&
                     (ar.Alert.AlertType.Label == "CRITICAL_GLUCOSE" || ar.Alert.AlertType.Label == "VERY_HIGH_GLUCOSE" || ar.Alert.AlertType.Label == "HIGH_GLUCOSE"))
@@ -143,11 +151,15 @@ namespace GlucoTrack_api.Controllers
             return Ok(result);
         }
 
+        /// <summary>
+        /// Returns the 10 most recent therapies created by the specified doctor, including their medication schedules.
+        ///
+        /// Each therapy includes its details and a list of associated medication schedules. If no therapies are found, returns 404.
+        /// </summary>
         [HttpGet("recent-therapies")]
         public async Task<IActionResult> GetDoctorRecentTherapies([FromQuery] int doctorId)
         {
-
-            // Solo terapie attive (EndDate == null)
+            // Only active therapies (EndDate == null)
             var recentTherapiesRaw = await _context.Therapies
                 .Where(t => t.DoctorId == doctorId)
                 .OrderByDescending(t => t.CreatedAt)
@@ -183,6 +195,14 @@ namespace GlucoTrack_api.Controllers
             return Ok(recentTherapies);
         }
 
+        /// <summary>
+        /// Returns a paginated list of patients, with optional filters for search, age, gender, and doctor-patient relationship.
+        ///
+        /// - If onlyDoctorPatients is true, only patients currently associated with the specified doctor are returned.
+        /// - Supports text search on first name, last name, or email.
+        /// - Filters by gender and age range (minAge, maxAge).
+        /// - Returns 10 patients per page. If no patients match, returns 404.
+        /// </summary>
         [HttpGet("patients")]
         public async Task<ActionResult<List<Users>>> GetDoctorPatients(
             [FromQuery] int doctorId,
@@ -244,12 +264,16 @@ namespace GlucoTrack_api.Controllers
             return Ok(result);
         }
 
-        public class TherapyWithSchedules
-        {
-            public Therapies Therapy { get; set; } = new Therapies();
-            public List<MedicationSchedules> MedicationSchedules { get; set; } = new List<MedicationSchedules>();
-        }
-
+        /// <summary>
+        /// Creates a new therapy or updates an existing one for a patient, including medication schedules.
+        ///
+        /// - If TherapyId is provided and valid, updates the existing therapy:
+        ///   - If the therapy has not started yet, performs a hard delete and creates a new therapy starting tomorrow.
+        ///   - If the therapy has started, performs a soft close (sets EndDate to today) and creates a new therapy starting tomorrow, linked to the previous one.
+        /// - If TherapyId is not provided, creates a new therapy starting tomorrow with the provided details and medication schedules.
+        /// - All insert, update, and delete operations are logged in the ChangeLogs table.
+        /// - Returns 200 OK on success, or an error message on failure.
+        /// </summary>
         [HttpPost("therapy")]
         public async Task<IActionResult> AddOrUpdateTherapy([FromBody] AddOrUpdateTherapyRequestDto dto)
         {
@@ -267,28 +291,97 @@ namespace GlucoTrack_api.Controllers
                     if (oldTherapy == null)
                         return NotFound("Therapy not found.");
 
-                    // Chiudi la terapia attuale (endDate = oggi)
                     var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+                    // Serializza lo stato prima della modifica/cancellazione
+                    var before = new
+                    {
+                        oldTherapy.TherapyId,
+                        oldTherapy.DoctorId,
+                        oldTherapy.UserId,
+                        oldTherapy.Title,
+                        oldTherapy.Instructions,
+                        oldTherapy.StartDate,
+                        oldTherapy.EndDate,
+                        oldTherapy.PreviousTherapyId,
+                        oldTherapy.CreatedAt
+                    };
 
                     if (oldTherapy.StartDate > today)
                     {
-                        // TODO: hard delete della terapia vuota, prima elimino scheduled intakes
-
+                        // Hard delete della terapia vuota
                         var medicationSchedules = await _context.MedicationSchedules
                             .Where(ms => ms.TherapyId == oldTherapy.TherapyId)
                             .ToListAsync();
+
+                        // Logga la cancellazione dei medication schedules
+                        foreach (var ms in medicationSchedules)
+                        {
+                            var msBefore = new
+                            {
+                                ms.MedicationScheduleId,
+                                ms.TherapyId,
+                                ms.MedicationName,
+                                ms.Quantity,
+                                ms.Unit,
+                                ms.DailyIntakes
+                            };
+                            await _changeLogService.LogChangeAsync(
+                                doctorId: oldTherapy.DoctorId,
+                                tableName: "MedicationSchedules",
+                                recordId: ms.MedicationScheduleId,
+                                action: "Delete",
+                                before: msBefore,
+                                after: null
+                            );
+                        }
 
                         _context.MedicationSchedules.RemoveRange(medicationSchedules);
                         await _context.SaveChangesAsync();
 
                         _context.Therapies.Remove(oldTherapy);
                         await _context.SaveChangesAsync();
+
+                        // Logga la cancellazione
+                        await _changeLogService.LogChangeAsync(
+                            doctorId: oldTherapy.DoctorId,
+                            tableName: "Therapies",
+                            recordId: oldTherapy.TherapyId,
+                            action: "Delete",
+                            before: before,
+                            after: null
+                        );
                     }
                     else
                     {
+                        // Soft close della terapia
                         oldTherapy.EndDate = today;
                         _context.Therapies.Update(oldTherapy);
                         await _context.SaveChangesAsync();
+
+                        // Serializza lo stato dopo la modifica
+                        var after = new
+                        {
+                            oldTherapy.TherapyId,
+                            oldTherapy.DoctorId,
+                            oldTherapy.UserId,
+                            oldTherapy.Title,
+                            oldTherapy.Instructions,
+                            oldTherapy.StartDate,
+                            oldTherapy.EndDate,
+                            oldTherapy.PreviousTherapyId,
+                            oldTherapy.CreatedAt
+                        };
+
+                        // Logga la modifica
+                        await _changeLogService.LogChangeAsync(
+                            doctorId: oldTherapy.DoctorId,
+                            tableName: "Therapies",
+                            recordId: oldTherapy.TherapyId,
+                            action: "SoftDelete",
+                            before: before,
+                            after: after
+                        );
                     }
 
                     // Crea la nuova terapia da domani, collegata alla precedente
@@ -307,6 +400,28 @@ namespace GlucoTrack_api.Controllers
                     _context.Therapies.Add(newTherapy);
                     await _context.SaveChangesAsync();
 
+                    // Logga l'inserimento della nuova terapia
+                    var afterInsert = new
+                    {
+                        newTherapy.TherapyId,
+                        newTherapy.DoctorId,
+                        newTherapy.UserId,
+                        newTherapy.Title,
+                        newTherapy.Instructions,
+                        newTherapy.StartDate,
+                        newTherapy.EndDate,
+                        newTherapy.PreviousTherapyId,
+                        newTherapy.CreatedAt
+                    };
+                    await _changeLogService.LogChangeAsync(
+                        doctorId: newTherapy.DoctorId,
+                        tableName: "Therapies",
+                        recordId: newTherapy.TherapyId,
+                        action: "Insert",
+                        before: null,
+                        after: afterInsert
+                    );
+
                     // Inserisci le medication schedules per la nuova terapia
                     foreach (var msDto in dto.MedicationSchedules)
                     {
@@ -319,8 +434,26 @@ namespace GlucoTrack_api.Controllers
                             DailyIntakes = msDto.DailyIntakes
                         };
                         _context.MedicationSchedules.Add(ms);
+                        await _context.SaveChangesAsync();
+                        // Logga l'inserimento del medication schedule
+                        var msAfter = new
+                        {
+                            ms.MedicationScheduleId,
+                            ms.TherapyId,
+                            ms.MedicationName,
+                            ms.Quantity,
+                            ms.Unit,
+                            ms.DailyIntakes
+                        };
+                        await _changeLogService.LogChangeAsync(
+                            doctorId: newTherapy.DoctorId,
+                            tableName: "MedicationSchedules",
+                            recordId: ms.MedicationScheduleId,
+                            action: "Insert",
+                            before: null,
+                            after: msAfter
+                        );
                     }
-                    await _context.SaveChangesAsync();
                 }
                 else
                 {
@@ -341,6 +474,28 @@ namespace GlucoTrack_api.Controllers
                     _context.Therapies.Add(therapyToAdd);
                     await _context.SaveChangesAsync();
 
+                    // Logga l'inserimento della nuova terapia
+                    var afterInsert = new
+                    {
+                        therapyToAdd.TherapyId,
+                        therapyToAdd.DoctorId,
+                        therapyToAdd.UserId,
+                        therapyToAdd.Title,
+                        therapyToAdd.Instructions,
+                        therapyToAdd.StartDate,
+                        therapyToAdd.EndDate,
+                        therapyToAdd.PreviousTherapyId,
+                        therapyToAdd.CreatedAt
+                    };
+                    await _changeLogService.LogChangeAsync(
+                        doctorId: therapyToAdd.DoctorId,
+                        tableName: "Therapies",
+                        recordId: therapyToAdd.TherapyId,
+                        action: "Insert",
+                        before: null,
+                        after: afterInsert
+                    );
+
                     foreach (var msDto in dto.MedicationSchedules)
                     {
                         var ms = new MedicationSchedules
@@ -352,8 +507,26 @@ namespace GlucoTrack_api.Controllers
                             DailyIntakes = msDto.DailyIntakes
                         };
                         _context.MedicationSchedules.Add(ms);
+                        await _context.SaveChangesAsync();
+                        // Logga l'inserimento del medication schedule
+                        var msAfter = new
+                        {
+                            ms.MedicationScheduleId,
+                            ms.TherapyId,
+                            ms.MedicationName,
+                            ms.Quantity,
+                            ms.Unit,
+                            ms.DailyIntakes
+                        };
+                        await _changeLogService.LogChangeAsync(
+                            doctorId: therapyToAdd.DoctorId,
+                            tableName: "MedicationSchedules",
+                            recordId: ms.MedicationScheduleId,
+                            action: "Insert",
+                            before: null,
+                            after: msAfter
+                        );
                     }
-                    await _context.SaveChangesAsync();
                 }
 
                 await transaction.CommitAsync();
@@ -366,6 +539,13 @@ namespace GlucoTrack_api.Controllers
             }
         }
 
+        /// <summary>
+        /// Returns the details of a specific therapy, including its medication schedules and patient information.
+        ///
+        /// - Requires a valid therapyId as a query parameter.
+        /// - Returns therapy details, a list of associated medication schedules, and basic patient info.
+        /// - If the therapy is not found, returns 404.
+        /// </summary>
         [HttpGet("therapy")]
         public async Task<IActionResult> GetTherapy([FromQuery] int therapyId)
         {
@@ -412,6 +592,14 @@ namespace GlucoTrack_api.Controllers
             return Ok(therapy);
         }
 
+        /// <summary>
+        /// Performs a soft delete of a therapy by setting its EndDate to today, without removing it from the database.
+        ///
+        /// - Requires a valid therapyId as a query parameter.
+        /// - Updates the EndDate of the therapy to today, keeping the record for historical purposes.
+        /// - Logs the change in the ChangeLogs table with before/after states and action "SoftDelete".
+        /// - Returns 200 OK on success, or an error message on failure.
+        /// </summary>
         [HttpDelete("therapy")]
         public async Task<IActionResult> SoftDeleteTherapy([FromQuery] int therapyId)
         {
@@ -426,11 +614,50 @@ namespace GlucoTrack_api.Controllers
 
             try
             {
+                // 1. Serializza lo stato prima della modifica
+                var before = new
+                {
+                    therapy.TherapyId,
+                    therapy.DoctorId,
+                    therapy.UserId,
+                    therapy.Title,
+                    therapy.Instructions,
+                    therapy.StartDate,
+                    therapy.EndDate,
+                    therapy.PreviousTherapyId,
+                    therapy.CreatedAt
+                };
+
                 // Imposta la data di fine a oggi (soft delete, non elimina dal DB)
                 var today = DateOnly.FromDateTime(DateTime.UtcNow);
                 therapy.EndDate = today;
                 _context.Therapies.Update(therapy);
                 await _context.SaveChangesAsync();
+
+                // 2. Serializza lo stato dopo la modifica
+                var after = new
+                {
+                    therapy.TherapyId,
+                    therapy.DoctorId,
+                    therapy.UserId,
+                    therapy.Title,
+                    therapy.Instructions,
+                    therapy.StartDate,
+                    therapy.EndDate,
+                    therapy.PreviousTherapyId,
+                    therapy.CreatedAt
+                };
+
+                // 3. Logga la modifica tramite ChangeLogService
+                await _changeLogService.LogChangeAsync(
+                    doctorId: therapy.DoctorId,
+                    tableName: "Therapies",
+                    recordId: therapy.TherapyId,
+                    action: "SoftDelete",
+                    before: before,
+                    after: after
+                );
+
                 return Ok("Therapy end date set to today (soft delete). Therapy remains in history.");
             }
             catch (Exception ex)
@@ -439,6 +666,15 @@ namespace GlucoTrack_api.Controllers
             }
         }
 
+        /// <summary>
+        /// Permanently deletes a therapy and all its related medication schedules from the database (hard delete).
+        ///
+        /// - Requires a valid <paramref name="therapyId"/> as a query parameter.
+        /// - Removes the therapy and all associated medication schedules from the database.
+        /// - Logs the deletion in the ChangeLogs table with the state before deletion (after = null).
+        /// - This operation is irreversible; the records are physically removed.
+        /// - Returns 200 OK on success, 404 if the therapy is not found, or 400 for invalid parameters.
+        /// </summary>
         [HttpDelete("hard-delete-therapy")]
         public async Task<IActionResult> HardDeleteTherapy([FromQuery] int therapyId)
         {
@@ -452,13 +688,38 @@ namespace GlucoTrack_api.Controllers
 
             try
             {
-                // Elimina la terapia e le relative medication schedules
+                // 1. Serialize the state before deletion for audit logging
+                var before = new
+                {
+                    therapy.TherapyId,
+                    therapy.DoctorId,
+                    therapy.UserId,
+                    therapy.Title,
+                    therapy.Instructions,
+                    therapy.StartDate,
+                    therapy.EndDate,
+                    therapy.PreviousTherapyId,
+                    therapy.CreatedAt
+                };
+
+                // Remove the therapy and all related medication schedules from the database
                 _context.Therapies.Remove(therapy);
                 var medicationSchedules = await _context.MedicationSchedules
                     .Where(ms => ms.TherapyId == therapyId)
                     .ToListAsync();
                 _context.MedicationSchedules.RemoveRange(medicationSchedules);
                 await _context.SaveChangesAsync();
+
+                // 2. Log the deletion using ChangeLogService (after = null)
+                await _changeLogService.LogChangeAsync(
+                    doctorId: therapy.DoctorId,
+                    tableName: "Therapies",
+                    recordId: therapy.TherapyId,
+                    action: "Delete",
+                    before: before,
+                    after: null
+                );
+
                 return Ok("Therapy and related medication schedules deleted successfully.");
             }
             catch (Exception ex)
@@ -467,11 +728,22 @@ namespace GlucoTrack_api.Controllers
             }
         }
 
-
+        /// <summary>
+        /// Returns a comprehensive analytics summary for a specific patient, including glycemic trends, therapy adherence, recent symptoms, alerts, comorbidities, risk factors, and extra-medication intakes.
+        ///
+        /// - Retrieves patient profile and demographics.
+        /// - Computes glycemic trends (weekly, monthly), statistics, and distribution for the last 6 months.
+        /// - Calculates therapy adherence percentage based on scheduled vs. performed intakes.
+        /// - Returns the 10 most recent symptoms and clinical alerts.
+        /// - Lists all comorbidities and risk factors for the patient.
+        /// - Includes recent extra-medication intakes (last 30 days).
+        /// </summary>
+        /// <param name="userId">The ID of the patient whose analytics are requested.</param>
+        /// <returns>200 OK with a <see cref="PatientAnalyticsDto"/> containing analytics data; 404 if the patient is not found.</returns>
         [HttpGet("patient-analytics")]
         public async Task<IActionResult> GetPatientAnalytics([FromQuery] int userId)
         {
-            // Recupera info base paziente
+            // Retrieve basic patient information
             var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
             if (user == null)
                 return NotFound("Patient not found.");
@@ -491,14 +763,14 @@ namespace GlucoTrack_api.Controllers
 
             // Glicemia: andamento settimanale/mensile (media, min, max, stddev per periodo)
             var now = DateTime.UtcNow;
-            var fromDate = now.AddMonths(-6); // ultimi 6 mesi
+            var fromDate = now.AddMonths(-6); // last 6 months
             var glycemic = await _context.GlycemicMeasurements
                 .Where(g => g.UserId == userId && g.MeasurementDateTime >= fromDate)
                 .ToListAsync();
 
-            // Raggruppa per settimana (ultime 4 settimane)
-            var last4WeeksMonday = now.Date.AddDays(-(int)now.DayOfWeek + (int)DayOfWeek.Monday).AddDays(-21); // Lunedì di 4 settimane fa
-            // Costruisci le ultime 4 settimane (anche se vuote)
+            // Group by week (last 4 weeks)
+            var last4WeeksMonday = now.Date.AddDays(-(int)now.DayOfWeek + (int)DayOfWeek.Monday).AddDays(-21); // Monday 4 weeks ago
+            // Build the last 4 weeks (even if empty)
             var weeklyTrends = new List<DTOs.GlycemicTrendDto>();
             for (int i = 3; i >= 0; i--)
             {
@@ -534,7 +806,7 @@ namespace GlucoTrack_api.Controllers
             }
             dto.GlycemicTrends = weeklyTrends;
 
-            // Calcolo aggregato min, max, stddev sulle ultime 4 settimane (tutti i valori)
+            // Aggregate calculation: min, max, stddev over the last 4 weeks (all values)
             var glycemicLast4Weeks = glycemic.Where(g => g.MeasurementDateTime.Date >= last4WeeksMonday).ToList();
             double? min4w = glycemicLast4Weeks.Any() ? glycemicLast4Weeks.Min(g => (double?)g.Value) : null;
             double? max4w = glycemicLast4Weeks.Any() ? glycemicLast4Weeks.Max(g => (double?)g.Value) : null;
@@ -551,7 +823,7 @@ namespace GlucoTrack_api.Controllers
                 StdDev = stddev4w
             };
 
-            // Distribuzione valori glicemici (istogramma, boxplot)
+            // Glycemic value distribution (histogram, boxplot)
             if (glycemic.Any())
             {
                 var values = glycemic.Select(g => g.Value).OrderBy(x => x).ToList();
@@ -577,8 +849,8 @@ namespace GlucoTrack_api.Controllers
                 };
             }
 
-            // Adesione terapia: % assunzioni programmate vs effettive (dall'inizio)
-            // Prendi tutte le terapie del paziente (senza filtro temporale)
+            // Therapy adherence: % of scheduled vs. performed intakes (from the beginning)
+            // Get all therapies for the patient (no time filter)
             var therapies = await _context.Therapies
                 .Where(t => t.UserId == userId)
                 .ToListAsync();
@@ -601,7 +873,7 @@ namespace GlucoTrack_api.Controllers
                     int daily = ms.DailyIntakes > 0 ? ms.DailyIntakes : 1;
                     scheduled += daily * daysCount;
 
-                    // Conta solo le intake per questa schedule, nel periodo della terapia
+                    // Count only the intakes for this schedule, within the therapy period
                     performed += await _context.MedicationIntakes
                         .Where(mi =>
                             mi.UserId == userId &&
@@ -619,7 +891,7 @@ namespace GlucoTrack_api.Controllers
                 AdherencePercent = scheduled > 0 ? Math.Round(100.0 * performed / scheduled, 1) : 0
             };
 
-            // Ultimi 10 sintomi
+            // Last 10 symptoms
             dto.RecentSymptoms = await _context.Symptoms
                 .Where(s => s.UserId == userId)
                 .OrderByDescending(s => s.OccurredAt)
@@ -631,7 +903,7 @@ namespace GlucoTrack_api.Controllers
                 })
                 .ToListAsync();
 
-            // Ultimi 10 alert clinici
+            // Last 10 clinical alerts
             dto.RecentAlerts = await _context.AlertRecipients
                 .Where(ar => ar.RecipientUserId == userId)
                 .Include(ar => ar.Alert)
@@ -662,7 +934,7 @@ namespace GlucoTrack_api.Controllers
                 })
                 .ToListAsync();
 
-            // Comorbidità
+            // Comorbidities
             dto.Comorbidities = await _context.ClinicalComorbidities
                 .Where(c => c.UserId == userId)
                 .Select(c => new DTOs.ComorbidityDto
@@ -674,13 +946,13 @@ namespace GlucoTrack_api.Controllers
                 })
                 .ToListAsync();
 
-            // Fattori di rischio
+            // Risk factors
             dto.RiskFactors = await _context.PatientRiskFactors
                 .Where(prf => prf.UserId == userId)
                 .Select(prf => prf.RiskFactor)
                 .ToListAsync();
 
-            // Assunzioni farmaci extra-terapia recenti (ultimi 30 giorni)
+            // Recent extra-therapy medication intakes (last 30 days)
             dto.RecentExtraMedicationIntakes = await _context.MedicationIntakes
                 .Where(mi => mi.UserId == userId && mi.MedicationScheduleId == null)
                 .OrderByDescending(mi => mi.IntakeDateTime)
@@ -711,7 +983,7 @@ namespace GlucoTrack_api.Controllers
                     .Where(c => c.UserId == dto.UserId)
                     .ToListAsync();
 
-                // Aggiungi solo le nuove comorbidità (stessa comorbidity e start date considerate "uguali")
+                // Log delle comorbidità già esistenti per update
                 foreach (var c in dto.Comorbidities)
                 {
                     bool alreadyExists = existingComorbidities.Any(ec =>
@@ -727,25 +999,69 @@ namespace GlucoTrack_api.Controllers
                             EndDate = c.EndDate
                         };
                         _context.ClinicalComorbidities.Add(newComorbidity);
+                        await _context.SaveChangesAsync();
+                        // Log insert
+                        var after = new
+                        {
+                            newComorbidity.ClinicalComorbidityId,
+                            newComorbidity.UserId,
+                            newComorbidity.Comorbidity,
+                            newComorbidity.StartDate,
+                            newComorbidity.EndDate
+                        };
+                        await _changeLogService.LogChangeAsync(
+                            doctorId: dto.UserId,
+                            tableName: "ClinicalComorbidities",
+                            recordId: newComorbidity.ClinicalComorbidityId,
+                            action: "Insert",
+                            before: null,
+                            after: after
+                        );
                     }
                     else
                     {
-                        // Aggiorna la comorbidità esistente se necessario
+                        // Update the existing comorbidity if needed
                         var existingComorbidity = existingComorbidities.First(ec => ec.ClinicalComorbidityId == c.Id);
+                        // Log before update
+                        var before = new
+                        {
+                            existingComorbidity.ClinicalComorbidityId,
+                            existingComorbidity.UserId,
+                            existingComorbidity.Comorbidity,
+                            existingComorbidity.StartDate,
+                            existingComorbidity.EndDate
+                        };
                         existingComorbidity.Comorbidity = c.Comorbidity;
                         existingComorbidity.StartDate = c.StartDate;
                         existingComorbidity.EndDate = c.EndDate;
                         _context.ClinicalComorbidities.Update(existingComorbidity);
+                        await _context.SaveChangesAsync();
+                        // Log after update
+                        var after = new
+                        {
+                            existingComorbidity.ClinicalComorbidityId,
+                            existingComorbidity.UserId,
+                            existingComorbidity.Comorbidity,
+                            existingComorbidity.StartDate,
+                            existingComorbidity.EndDate
+                        };
+                        await _changeLogService.LogChangeAsync(
+                            doctorId: dto.UserId,
+                            tableName: "ClinicalComorbidities",
+                            recordId: existingComorbidity.ClinicalComorbidityId,
+                            action: "Update",
+                            before: before,
+                            after: after
+                        );
                     }
                 }
-                await _context.SaveChangesAsync();
 
-                // Recupera i risk factors esistenti per l'utente
+                // Retrieve existing risk factors for the user
                 var existingRiskFactors = await _context.PatientRiskFactors
                     .Where(rf => rf.UserId == dto.UserId)
                     .ToListAsync();
 
-                // Aggiungi solo i nuovi risk factors
+                // Add only new risk factors
                 foreach (var riskFactorId in dto.RiskFactorIds)
                 {
                     bool alreadyExists = existingRiskFactors.Any(rf => rf.RiskFactorId == riskFactorId);
@@ -757,9 +1073,23 @@ namespace GlucoTrack_api.Controllers
                             RiskFactorId = riskFactorId
                         };
                         _context.PatientRiskFactors.Add(newRisk);
+                        await _context.SaveChangesAsync();
+                        // Log insert
+                        var after = new
+                        {
+                            newRisk.UserId,
+                            newRisk.RiskFactorId
+                        };
+                        await _changeLogService.LogChangeAsync(
+                            doctorId: dto.UserId,
+                            tableName: "PatientRiskFactors",
+                            recordId: newRisk.RiskFactorId,
+                            action: "Insert",
+                            before: null,
+                            after: after
+                        );
                     }
                 }
-                await _context.SaveChangesAsync();
 
                 await transaction.CommitAsync();
                 return Ok("Comorbidities and risk factors added successfully.");
@@ -772,7 +1102,7 @@ namespace GlucoTrack_api.Controllers
         }
 
         /// <summary>
-        /// Elimina un fattore di rischio specifico per un utente.
+        /// Deletes a specific risk factor for a user.
         /// </summary>
         [HttpDelete("delete-user-riskfactor")]
         public async Task<IActionResult> DeleteUserRiskFactor([FromQuery] int userId, [FromQuery] int riskFactorId)
@@ -784,13 +1114,31 @@ namespace GlucoTrack_api.Controllers
             if (risk == null)
                 return NotFound("Risk factor not found for this user.");
 
+            // 1. Serialize the state before deletion
+            var before = new
+            {
+                risk.UserId,
+                risk.RiskFactorId
+            };
+
             _context.PatientRiskFactors.Remove(risk);
             await _context.SaveChangesAsync();
+
+            // 2. Log the deletion using ChangeLogService (DetailsAfter = null)
+            await _changeLogService.LogChangeAsync(
+                doctorId: userId, // oppure recupera il doctorId se disponibile
+                tableName: "PatientRiskFactors",
+                recordId: risk.RiskFactorId,
+                action: "Delete",
+                before: before,
+                after: null
+            );
+
             return Ok("Risk factor removed for user.");
         }
 
         /// <summary>
-        /// Elimina una comorbidità specifica per un utente.
+        /// Deletes a specific comorbidity for a user.
         /// </summary>
         [HttpDelete("delete-user-comorbidity")]
         public async Task<IActionResult> DeleteUserComorbidity([FromQuery] int userId, [FromQuery] string comorbidity, [FromQuery] string? startDate)
@@ -805,8 +1153,29 @@ namespace GlucoTrack_api.Controllers
             if (com == null)
                 return NotFound("Comorbidity not found for this user.");
 
+            // 1. Serialize the state before deletion
+            var before = new
+            {
+                com.ClinicalComorbidityId,
+                com.UserId,
+                com.Comorbidity,
+                com.StartDate,
+                com.EndDate
+            };
+
             _context.ClinicalComorbidities.Remove(com);
             await _context.SaveChangesAsync();
+
+            // 2. Log the deletion using ChangeLogService (DetailsAfter = null)
+            await _changeLogService.LogChangeAsync(
+                doctorId: userId, // oppure recupera il doctorId se disponibile
+                tableName: "ClinicalComorbidities",
+                recordId: com.ClinicalComorbidityId,
+                action: "Delete",
+                before: before,
+                after: null
+            );
+
             return Ok("Comorbidity removed for user.");
         }
     }

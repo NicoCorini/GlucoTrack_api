@@ -19,7 +19,7 @@ namespace GlucoTrack_api.Controllers
         }
 
         /// <summary>
-        /// Restituisce tutti gli alert non risolti ricevuti da un utente (come destinatario), con dettagli tipo, messaggio, stato, ecc.
+        /// Returns all unresolved alerts received by a user (as recipient), including type, message, status, and other details.
         /// </summary>
         [HttpGet("user-not-resolved-alerts")]
         public async Task<IActionResult> GetUserNotResolvedAlerts([FromQuery] int userId)
@@ -62,7 +62,7 @@ namespace GlucoTrack_api.Controllers
         }
 
         /// <summary>
-        /// Restituisce tutti gli alert non risolti ricevuti da un utente (come destinatario), con dettagli tipo, messaggio, stato, ecc.
+        /// Returns all alerts received by a user (as recipient), including type, message, status, and other details.
         /// </summary>
         [HttpGet("user-alerts")]
         public async Task<IActionResult> GetUserAlerts([FromQuery] int userId)
@@ -105,7 +105,7 @@ namespace GlucoTrack_api.Controllers
         }
 
         /// <summary>
-        /// Segna come risolto un alert per un destinatario specifico (AlertRecipientId).
+        /// Marks an alert as resolved for a specific recipient (by AlertRecipientId).
         /// </summary>
         [HttpPost("resolve-alert")]
         public async Task<IActionResult> ResolveAlert([FromQuery] int alertRecipientId)
@@ -120,7 +120,7 @@ namespace GlucoTrack_api.Controllers
             if (recipient == null)
                 return NotFound("AlertRecipient not found.");
 
-            // Segna come letto e risolto
+            // Mark as read and resolved
             recipient.IsRead = true;
             recipient.ReadAt = DateTime.UtcNow;
             if (recipient.Alert != null)
@@ -135,7 +135,7 @@ namespace GlucoTrack_api.Controllers
 
 
         /// <summary>
-        /// Crea un alert glicemico manualmente (es. da frontend) per un valore fuori soglia.
+        /// Manually creates a glycemia alert (e.g., from frontend) for an out-of-range value.
         /// </summary>
         [HttpPost("create-glycemia-alert")]
         public async Task<IActionResult> CreateGlycemiaAlert([FromBody] GlycemiaAlertRequest req)
@@ -143,12 +143,12 @@ namespace GlucoTrack_api.Controllers
             if (req == null || req.UserId <= 0 || req.Value < 40 || req.Value > 400)
                 return BadRequest("Invalid data");
 
-            // Determina label e destinatari
+            // Determine label and recipients
             string label;
             int? doctorId = _context.PatientDoctors.FirstOrDefault(x => x.PatientId == req.UserId)?.DoctorId;
             int[] recipients;
             string msg;
-            // Mappa i livelli frontend su label AlertTypes esistenti
+            // Map frontend levels to existing AlertTypes labels
             if (req.Level == "CRITICAL")
             {
                 label = "CRITICAL_GLUCOSE";
@@ -173,7 +173,7 @@ namespace GlucoTrack_api.Controllers
                 return BadRequest("Invalid level");
             }
 
-            // Crea alert (logica simile a MonitoringUtils)
+            // Create alert (logic similar to MonitoringUtils)
             var alertType = await _context.AlertTypes.FirstOrDefaultAsync(a => a.Label == label);
             if (alertType == null) return BadRequest("Alert type not found");
 

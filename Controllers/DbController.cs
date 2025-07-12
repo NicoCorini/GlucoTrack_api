@@ -21,17 +21,19 @@ Sample Data Scenarios (June 2025)
 | 4      | Laura Giuliani    | Patient | Dr. Bianchi    | Metformin (2/day)                  | 2 days with <6 glycemic logs (2025-06-10, 2025-06-25), 1 missed intake (2025-06-15), 1 critical glycemia, 1 critical symptom |
 | 5      | Francesco Bruno   | Patient | Dr. Verdi      | Metformin + Basal (1/day each)     | 3 consecutive days <6 glycemic logs (2025-06-12, 2025-06-13, 2025-06-14), frequent mild hyperglycemia, all intakes correct   |
 | 6      | Giulia Neri       | Patient | Dr. Verdi      | Basal (1/day, Therapy A)           | 1 day with no glycemic logs (2025-06-18), 2 missed intakes (2025-06-20, 2025-07-10), 1 severe glycemia, no critical symptoms. |
-                                                        | + SGLT2 (1/day, Therapy B)         |
+                                                    | + SGLT2 (1/day, Therapy B)         |
 
+====================================================================================
+/*
 Details:
-- All users created on 2025-06-01. All data starts from this date.
-- Each patient has an active therapy. Laura has a therapy with a single drug (Metformin) but 2 daily intakes (breakfast and dinner).
-- Glycemic logs: 6/day for most days, with exceptions as above (tutte le eccezioni sono a giugno 2025, già passato rispetto a oggi).
-- Medication intakes: all correct for Marco e Francesco; Laura e Giulia hanno missed intakes nei giorni indicati sopra.
-- Glycemic values: realistic, con giorni/valori che possono generare alert (mild/severe/critical hyperglycemia).
-- Symptoms: Laura ha un critical symptom (loss of consciousness) il 2025-06-10.
-- Tutte le situazioni sono pensate per triggerare i principali alert di monitoraggio.
-- Giulia Neri (UserId=6) è il caso chiave: due terapie attive, ciascuna con un farmaco diverso (Basal insulin e SGLT2 inhibitor), entrambe con un solo daily intake. Questo copre lo scenario di paziente con più terapie anche se ogni terapia ha un solo farmaco e un solo daily intake.
+-All users are created on 2025-06-01. All data starts from this date.
+- Each patient has an active therapy. Laura has a therapy with a single drug (Metformin) but two daily intakes (breakfast and dinner).
+- Glycemic logs: 6 per day for most days, with exceptions as described above (all exceptions occur in June 2025, which is already in the past relative to today).
+- Medication intakes: all correct for Marco and Francesco; Laura and Giulia have missed intakes on the days indicated above.
+- Glycemic values: realistic, with days/values that can generate alerts (mild/severe/critical hyperglycemia).
+- Symptoms: Laura has a critical symptom (loss of consciousness) on 2025-06-10.
+- All situations are designed to trigger the main monitoring alerts.
+- Giulia Neri (6) is the key case: two active therapies, each with a different drug (Basal insulin and SGLT2 inhibitor), both with a single daily intake. This covers the scenario of a patient with multiple therapies, even if each therapy has only one drug and one daily intake.
 ====================================================================================
 */
 
@@ -49,6 +51,9 @@ namespace GlucoTrack_api.Controllers
             _context = context;
         }
 
+        /// <summary>
+        /// Deletes all data from the database, including users, therapies, measurements, alerts, and related entities. The deletion order respects foreign key constraints.
+        /// </summary>
         [HttpPost("clear")]
         public async Task<IActionResult> Clear()
         {
@@ -83,13 +88,16 @@ namespace GlucoTrack_api.Controllers
             }
         }
 
+        /// <summary>
+        /// Generates and inserts a comprehensive set of sample data into the database, including users, roles, therapies, measurements, medication intakes, symptoms, and alerts. The generated data covers a variety of clinical scenarios for testing and demonstration purposes. Also generates an HTML report summarizing the sample data.
+        /// </summary>
         [HttpGet("generate-sample-data")]
         public async Task<IActionResult> GenerateSampleData()
         {
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // 1. Ruoli
+                // 1. Roles
                 if (!await _context.Roles.AnyAsync())
                 {
                     await _context.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT Roles ON");
@@ -102,7 +110,7 @@ namespace GlucoTrack_api.Controllers
                     await _context.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT Roles OFF");
                 }
 
-                // 2. Utenti
+                // 2. Users
                 if (!await _context.Users.AnyAsync())
                 {
                     await _context.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT Users ON");
@@ -119,7 +127,7 @@ namespace GlucoTrack_api.Controllers
                     await _context.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT Users OFF");
                 }
 
-                // 3. Patient-Doctor
+                // 3. Patient-Doctor relationships
                 if (!await _context.PatientDoctors.AnyAsync())
                 {
                     _context.PatientDoctors.AddRange(new[] {
@@ -237,19 +245,19 @@ namespace GlucoTrack_api.Controllers
                 }
 
                 // 11. GlycemicMeasurements, MedicationIntakes, Symptoms (scenario-driven)
-                // Date range: 2025-05-01 to ieri (oggi-1)
+                // Date range: 2025-05-01 to yesterday (today-1)
                 var startDate = new DateOnly(2025, 5, 1);
                 var endDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-1));
                 var random = new Random(42); // Seed for reproducibility
 
-                // Helper for glycemia values (to trigger alerts)
+                // Helper arrays for glycemia values (to trigger alerts)
                 // MODERATE: 160-219, SEVERE: 220-349, CRITICAL: >=350
                 int[] normalGly = { 95, 110, 120, 105, 100, 115 };
                 int[] moderateGly = { 165, 175, 200 };
                 int[] severeGly = { 225, 240, 300 };
                 int[] criticalGly = { 355, 400 };
 
-                // Marco Rossi (UserId=3): 6/day, tutti i giorni, valori normali, ma ogni 10 giorni un valore MODERATE, ogni 20 giorni uno SEVERE, ogni 30 giorni uno CRITICAL
+                // Marco Rossi (UserId=3): 6/day, every day, normal values, but every 10 days a MODERATE value, every 20 days a SEVERE value, every 30 days a CRITICAL value
                 if (!await _context.GlycemicMeasurements.AnyAsync(g => g.UserId == 3))
                 {
                     var marcoGly = new List<GlycemicMeasurements>();
@@ -290,7 +298,7 @@ namespace GlucoTrack_api.Controllers
                     }
                 }
 
-                // Laura Giuliani (UserId=4): 2 giorni con <6 logs, 1 giorno con critical glycemia, ogni 15 giorni un valore SEVERE, ogni 7 giorni uno MODERATE
+                // Laura Giuliani (UserId=4): 2 days with <6 logs, 1 day with critical glycemia, every 15 days a SEVERE value, every 7 days a MODERATE value
                 if (!await _context.GlycemicMeasurements.AnyAsync(g => g.UserId == 4))
                 {
                     var lauraGly = new List<GlycemicMeasurements>();
@@ -333,7 +341,7 @@ namespace GlucoTrack_api.Controllers
                     }
                 }
 
-                // Francesco Bruno (UserId=5): 3 giorni consecutivi <6 logs, frequenti MODERATE e SEVERE hyperglycemia
+                // Francesco Bruno (UserId=5): 3 consecutive days with <6 logs, frequent MODERATE and SEVERE hyperglycemia
                 if (!await _context.GlycemicMeasurements.AnyAsync(g => g.UserId == 5))
                 {
                     var fraGly = new List<GlycemicMeasurements>();
@@ -376,7 +384,7 @@ namespace GlucoTrack_api.Controllers
                     }
                 }
 
-                // Giulia Neri (UserId=6): 1 giorno senza log, 2 giorni con missed intakes, 1 giorno SEVERE glycemia, ogni 9 giorni MODERATE
+                // Giulia Neri (UserId=6): 1 day without logs, 2 days with missed intakes, 1 day with SEVERE glycemia, every 9 days MODERATE
                 if (!await _context.GlycemicMeasurements.AnyAsync(g => g.UserId == 6))
                 {
                     var giuliaGly = new List<GlycemicMeasurements>();
@@ -417,8 +425,8 @@ namespace GlucoTrack_api.Controllers
                     }
                 }
 
-                // MedicationIntakes: Marco (tutti ok), Laura (1 missed), Francesco (tutti ok), Giulia (2 missed)
-                // Marco: TherapyId=1, Schedules 1,2 (Rapid, Basal), 1/day ciascuno
+                // MedicationIntakes: Marco (all correct), Laura (1 missed), Francesco (all correct), Giulia (2 missed)
+                // Marco: TherapyId=1, Schedules 1,2 (Rapid, Basal), 1/day each
                 if (!await _context.MedicationIntakes.AnyAsync(m => m.UserId == 3))
                 {
                     var marcoIntakes = new List<MedicationIntakes>();
@@ -445,7 +453,7 @@ namespace GlucoTrack_api.Controllers
                     await _context.SaveChangesAsync();
                 }
 
-                // Laura: TherapyId=2, Schedule 3 (Metformin), 2/day, 1 missed il 2025-06-15 (dinner)
+                // Laura: TherapyId=2, Schedule 3 (Metformin), 2/day, 1 missed on 2025-06-15 (dinner)
                 if (!await _context.MedicationIntakes.AnyAsync(m => m.UserId == 4))
                 {
                     var lauraIntakes = new List<MedicationIntakes>();
@@ -473,7 +481,7 @@ namespace GlucoTrack_api.Controllers
                     await _context.SaveChangesAsync();
                 }
 
-                // Francesco: TherapyId=3, Schedules 4 (Metformin), 5 (Basal), 1/day ciascuno
+                // Francesco: TherapyId=3, Schedules 4 (Metformin), 5 (Basal), 1/day each
                 if (!await _context.MedicationIntakes.AnyAsync(m => m.UserId == 5))
                 {
                     var fraIntakes = new List<MedicationIntakes>();
@@ -500,7 +508,7 @@ namespace GlucoTrack_api.Controllers
                     await _context.SaveChangesAsync();
                 }
 
-                // Giulia: TherapyId=4 (Basal, sched 6), TherapyId=5 (SGLT2, sched 7), 1/day ciascuno, missed 2025-06-20 (Basal), 2025-07-10 (SGLT2)
+                // Giulia: TherapyId=4 (Basal, sched 6), TherapyId=5 (SGLT2, sched 7), 1/day each, missed 2025-06-20 (Basal), 2025-07-10 (SGLT2)
                 if (!await _context.MedicationIntakes.AnyAsync(m => m.UserId == 6))
                 {
                     var giuliaIntakes = new List<MedicationIntakes>();
@@ -529,7 +537,7 @@ namespace GlucoTrack_api.Controllers
                     await _context.SaveChangesAsync();
                 }
 
-                // Symptoms: almeno 1 ogni 7 giorni per paziente, Laura ha critical symptom il 2025-06-10
+                // Symptoms: at least 1 every 7 days per patient, Laura has a critical symptom on 2025-06-10
                 if (!await _context.Symptoms.AnyAsync())
                 {
                     var symptomsSeed = new List<Symptoms>();
@@ -578,7 +586,7 @@ namespace GlucoTrack_api.Controllers
 
                 await transaction.CommitAsync();
 
-                // --- GENERAZIONE REPORT ---
+                // --- REPORT GENERATION ---
                 var users = await _context.Users.Include(u => u.Role).ToListAsync();
                 var doctors = users.Where(u => u.RoleId == 2).ToList();
                 var patients = users.Where(u => u.RoleId == 3).ToList();
@@ -672,5 +680,6 @@ namespace GlucoTrack_api.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
         }
+
     }
 }
