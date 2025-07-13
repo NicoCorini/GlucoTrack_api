@@ -329,7 +329,7 @@ namespace GlucoTrack_api.Controllers
                     TherapyId = t.TherapyId,
                     Title = t.Title,
                     Instructions = t.Instructions ?? string.Empty,
-                    StartDate = t.StartDate.HasValue ? t.StartDate.Value.ToDateTime(TimeOnly.MinValue) : null,
+                    StartDate = t.StartDate.ToDateTime(TimeOnly.MinValue),
                     EndDate = t.EndDate.HasValue ? t.EndDate.Value.ToDateTime(TimeOnly.MinValue) : null,
                     MedicationSchedules = _context.MedicationSchedules
                         .Where(ms => ms.TherapyId == t.TherapyId)

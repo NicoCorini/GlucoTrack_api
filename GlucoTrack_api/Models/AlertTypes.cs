@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GlucoTrack_api.Models;
 
-[Index("Label", Name = "UQ__AlertTyp__EDBE0C582053CD1E", IsUnique = true)]
+[Index("Label", Name = "UQ__AlertTyp__EDBE0C583A8E6890", IsUnique = true)]
 public partial class AlertTypes
 {
     [Key]

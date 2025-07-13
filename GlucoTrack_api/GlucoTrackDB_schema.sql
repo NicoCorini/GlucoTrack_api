@@ -85,8 +85,8 @@ CREATE TABLE Users (
     UserId INT IDENTITY(1,1) PRIMARY KEY,
     Username VARCHAR(255) NOT NULL UNIQUE,
     PasswordHash VARCHAR(255) NOT NULL,
-    FirstName VARCHAR(255) NULL,
-    LastName VARCHAR(255) NULL,
+    FirstName VARCHAR(255) NOT NULL,
+    LastName VARCHAR(255) NOT NULL,
     Email VARCHAR(255) NOT NULL UNIQUE,
     RoleId INT NOT NULL FOREIGN KEY REFERENCES Roles(RoleId),
     -- Patient Data
@@ -129,8 +129,8 @@ CREATE TABLE PatientRiskFactors (
 CREATE TABLE ClinicalComorbidities (
     ClinicalComorbidityId INT IDENTITY(1,1) PRIMARY KEY,
     UserId INT NOT NULL FOREIGN KEY REFERENCES Users(UserId),
-    Comorbidity VARCHAR(255) NULL,
-    StartDate DATE NULL,
+    Comorbidity VARCHAR(255) NOT NULL,
+    StartDate DATE NOT NULL,
     EndDate DATE NULL
 );
 
@@ -141,10 +141,10 @@ CREATE TABLE Therapies (
     UserId INT NOT NULL FOREIGN KEY REFERENCES Users(UserId),
     Title TEXT NOT NULL,
     Instructions TEXT NULL,
-    StartDate DATE NULL,
+    StartDate DATE NOT NULL,
     EndDate DATE NULL,
     PreviousTherapyId INT NULL FOREIGN KEY REFERENCES Therapies(TherapyId),
-    CreatedAt DATETIME NULL
+    CreatedAt DATETIME NOT NULL
 );
 
 -- Medication Schedules
@@ -197,7 +197,7 @@ CREATE TABLE GlycemicMeasurements (
 CREATE TABLE Symptoms (
     SymptomId INT IDENTITY(1,1) PRIMARY KEY,
     UserId INT NOT NULL FOREIGN KEY REFERENCES Users(UserId),
-    Description VARCHAR(255) NULL,
+    Description VARCHAR(255) NOT NULL,
     OccurredAt DATETIME NOT NULL
 );
 
@@ -205,8 +205,8 @@ CREATE TABLE Symptoms (
 CREATE TABLE ReportedConditions (
     ConditionId INT IDENTITY(1,1) PRIMARY KEY,
     UserId INT NOT NULL FOREIGN KEY REFERENCES Users(UserId),
-    Description VARCHAR(255) NULL,
-    StartDate DATETIME NULL,
+    Description VARCHAR(255) NOT NULL,
+    StartDate DATETIME NOT NULL,
     EndDate DATETIME NULL
 );
 
@@ -223,7 +223,7 @@ CREATE TABLE Alerts (
     AlertTypeId INT NOT NULL FOREIGN KEY REFERENCES AlertTypes(AlertTypeId),
     UserId INT NOT NULL FOREIGN KEY REFERENCES Users(UserId),
     Message NVARCHAR(MAX) NOT NULL,
-    CreatedAt DATETIME NULL,
+    CreatedAt DATETIME NOT NULL,
     ReferenceDate DATE NULL,
     ReferencePeriod VARCHAR(50) NULL,
     ReferenceObjectId INT NULL,
@@ -235,7 +235,7 @@ CREATE TABLE AlertRecipients (
     AlertRecipientId INT IDENTITY(1,1) PRIMARY KEY,
     AlertId INT NOT NULL FOREIGN KEY REFERENCES Alerts(AlertId),
     RecipientUserId INT NOT NULL FOREIGN KEY REFERENCES Users(UserId),
-    IsRead BIT NULL DEFAULT 0,
+    IsRead BIT NOT NULL DEFAULT 0,
     ReadAt DATETIME NULL,
     NotifiedAt DATETIME NULL
 );

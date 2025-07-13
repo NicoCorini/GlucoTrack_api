@@ -15,9 +15,9 @@ public partial class ClinicalComorbidities
 
     [StringLength(255)]
     [Unicode(false)]
-    public string? Comorbidity { get; set; }
+    public string Comorbidity { get; set; } = null!;
 
-    public DateOnly? StartDate { get; set; }
+    public DateOnly StartDate { get; set; }
 
     public DateOnly? EndDate { get; set; }
 

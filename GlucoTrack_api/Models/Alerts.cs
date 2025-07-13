@@ -15,12 +15,10 @@ public partial class Alerts
 
     public int UserId { get; set; }
 
-    [StringLength(255)]
-    [Unicode(false)]
     public string Message { get; set; } = null!;
 
     [Column(TypeName = "datetime")]
-    public DateTime? CreatedAt { get; set; }
+    public DateTime CreatedAt { get; set; }
 
     public DateOnly? ReferenceDate { get; set; }
 

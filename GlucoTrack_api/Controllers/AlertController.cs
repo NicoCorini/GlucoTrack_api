@@ -182,8 +182,7 @@ namespace GlucoTrack_api.Controllers
                 a.UserId == req.UserId &&
                 a.AlertTypeId == alertType.AlertTypeId &&
                 a.Message == msg &&
-                a.CreatedAt.HasValue &&
-                a.CreatedAt.Value.Date == today
+                a.CreatedAt.Date == today
             );
             if (exists) return Ok(new { created = false, reason = "Duplicate" });
 

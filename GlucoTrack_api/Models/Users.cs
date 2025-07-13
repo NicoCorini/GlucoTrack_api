@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GlucoTrack_api.Models;
 
-[Index("Username", Name = "UQ__Users__536C85E4F9D5C5EB", IsUnique = true)]
-[Index("Email", Name = "UQ__Users__A9D10534BA1E7D49", IsUnique = true)]
+[Index("Username", Name = "UQ__Users__536C85E4E7CB9FC3", IsUnique = true)]
+[Index("Email", Name = "UQ__Users__A9D1053417C6A854", IsUnique = true)]
 public partial class Users
 {
     [Key]
@@ -23,11 +23,11 @@ public partial class Users
 
     [StringLength(255)]
     [Unicode(false)]
-    public string? FirstName { get; set; }
+    public string FirstName { get; set; } = null!;
 
     [StringLength(255)]
     [Unicode(false)]
-    public string? LastName { get; set; }
+    public string LastName { get; set; } = null!;
 
     [StringLength(255)]
     [Unicode(false)]

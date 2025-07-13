@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GlucoTrack_api.Models;
 
-[Index("RoleName", Name = "UQ__Roles__8A2B6160032AB5B4", IsUnique = true)]
+[Index("RoleName", Name = "UQ__Roles__8A2B6160ED11757C", IsUnique = true)]
 public partial class Roles
 {
     [Key]

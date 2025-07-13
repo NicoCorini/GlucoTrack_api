@@ -15,7 +15,7 @@ public partial class AlertRecipients
 
     public int RecipientUserId { get; set; }
 
-    public bool? IsRead { get; set; }
+    public bool IsRead { get; set; }
 
     [Column(TypeName = "datetime")]
     public DateTime? ReadAt { get; set; }

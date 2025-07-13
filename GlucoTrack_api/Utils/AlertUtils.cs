@@ -66,8 +66,7 @@ namespace GlucoTrack_api.Utils
                 a.UserId == userId &&
                 a.AlertTypeId == alertType.AlertTypeId &&
                 a.Message == msg &&
-                a.CreatedAt.HasValue &&
-                a.CreatedAt.Value.Date == today
+                a.CreatedAt.Date == today
             );
             if (exists) return false;
 

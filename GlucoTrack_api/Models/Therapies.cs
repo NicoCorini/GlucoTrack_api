@@ -21,14 +21,14 @@ public partial class Therapies
     [Column(TypeName = "text")]
     public string? Instructions { get; set; }
 
-    public DateOnly? StartDate { get; set; }
+    public DateOnly StartDate { get; set; }
 
     public DateOnly? EndDate { get; set; }
 
     public int? PreviousTherapyId { get; set; }
 
     [Column(TypeName = "datetime")]
-    public DateTime? CreatedAt { get; set; }
+    public DateTime CreatedAt { get; set; }
 
     [ForeignKey("DoctorId")]
     [InverseProperty("TherapiesDoctor")]

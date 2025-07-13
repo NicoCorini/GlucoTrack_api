@@ -15,7 +15,7 @@ public partial class Symptoms
 
     [StringLength(255)]
     [Unicode(false)]
-    public string? Description { get; set; }
+    public string Description { get; set; } = null!;
 
     [Column(TypeName = "datetime")]
     public DateTime OccurredAt { get; set; }

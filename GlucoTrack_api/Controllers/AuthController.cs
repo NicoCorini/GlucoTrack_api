@@ -113,7 +113,7 @@ namespace GlucoTrack_api.Controllers
                     TherapyId = t.TherapyId,
                     Title = t.Title ?? string.Empty,
                     Instructions = t.Instructions ?? string.Empty,
-                    StartDate = t.StartDate?.ToDateTime(TimeOnly.MinValue),
+                    StartDate = t.StartDate.ToDateTime(TimeOnly.MinValue),
                     EndDate = t.EndDate?.ToDateTime(TimeOnly.MinValue),
                     MedicationSchedules = t.MedicationSchedules.Select(ms => new MedicationScheduleDto
                     {

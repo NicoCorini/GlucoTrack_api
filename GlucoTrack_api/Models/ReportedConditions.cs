@@ -15,10 +15,10 @@ public partial class ReportedConditions
 
     [StringLength(255)]
     [Unicode(false)]
-    public string? Description { get; set; }
+    public string Description { get; set; } = null!;
 
     [Column(TypeName = "datetime")]
-    public DateTime? StartDate { get; set; }
+    public DateTime StartDate { get; set; }
 
     [Column(TypeName = "datetime")]
     public DateTime? EndDate { get; set; }

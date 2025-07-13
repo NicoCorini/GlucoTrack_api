@@ -127,7 +127,7 @@ namespace GlucoTrack_api.Controllers
                     PatientLastName = ar.Alert.User?.LastName ?? string.Empty,
                     Level = level,
                     Message = ar.Alert.Message ?? string.Empty,
-                    CreatedAt = ar.Alert.CreatedAt ?? DateTime.MinValue,
+                    CreatedAt = ar.Alert.CreatedAt,
                     Status = ar.Alert.Status ?? string.Empty
                 });
             }
@@ -171,11 +171,11 @@ namespace GlucoTrack_api.Controllers
                 TherapyId = t.TherapyId,
                 Title = t.Title ?? string.Empty,
                 Instructions = t.Instructions ?? string.Empty,
-                StartDate = t.StartDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
+                StartDate = t.StartDate,
                 EndDate = t.EndDate,
                 DoctorId = t.DoctorId,
                 UserId = t.UserId,
-                CreatedAt = t.CreatedAt ?? DateTime.MinValue,
+                CreatedAt = t.CreatedAt,
                 MedicationSchedules = _context.MedicationSchedules
                     .Where(ms => ms.TherapyId == t.TherapyId)
                     .Select(ms => new RecentMedicationScheduleDto
@@ -859,7 +859,7 @@ namespace GlucoTrack_api.Controllers
             int performed = 0;
             foreach (var therapy in therapies)
             {
-                var therapyStart = therapy.StartDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+                var therapyStart = therapy.StartDate;
                 var therapyEnd = therapy.EndDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
                 var to = therapy.EndDate == null || therapyEnd > DateOnly.FromDateTime(DateTime.UtcNow)
                     ? DateOnly.FromDateTime(DateTime.UtcNow)
