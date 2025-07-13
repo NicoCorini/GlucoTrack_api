@@ -105,7 +105,8 @@ namespace GlucoTrack_api.Controllers
         [HttpPost("add-glycemic-log")]
         public async Task<ActionResult> AddOrUpdateGlycemicLog([FromBody] AddGlycemicLogRequestDto glycemicLog)
         {
-            if (glycemicLog == null || glycemicLog.UserId <= 0 || glycemicLog.Value <= 0)
+            if (glycemicLog == null || glycemicLog.UserId <= 0 || glycemicLog.Value <= 0
+                || glycemicLog.MeasurementTypeId <= 0 || glycemicLog.MealTypeId <= 0)
                 return BadRequest("Invalid glycemic log data.");
             try
             {

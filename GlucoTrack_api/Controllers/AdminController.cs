@@ -56,7 +56,8 @@ namespace GlucoTrack_api.Controllers
             if (userDto == null)
                 return BadRequest("Invalid user data.");
 
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            var isInMemory = _context.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory";
+            var transaction = isInMemory ? null : await _context.Database.BeginTransactionAsync();
             try
             {
                 bool isUpdate = userDto.UserId > 0;
@@ -108,12 +109,14 @@ namespace GlucoTrack_api.Controllers
                     await _context.SaveChangesAsync();
                 }
 
-                await transaction.CommitAsync();
+                if (!isInMemory && transaction != null)
+                    await transaction.CommitAsync();
                 return Ok("User saved successfully.");
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
+                if (!isInMemory && transaction != null)
+                    await transaction.RollbackAsync();
                 return StatusCode(500, $"Internal server error: {ex.Message}");
             }
         }

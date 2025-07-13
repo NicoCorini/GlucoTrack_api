@@ -222,7 +222,7 @@ CREATE TABLE Alerts (
     AlertId INT IDENTITY(1,1) PRIMARY KEY,
     AlertTypeId INT NOT NULL FOREIGN KEY REFERENCES AlertTypes(AlertTypeId),
     UserId INT NOT NULL FOREIGN KEY REFERENCES Users(UserId),
-    Message TEXT NOT NULL,
+    Message NVARCHAR(MAX) NOT NULL,
     CreatedAt DATETIME NULL,
     ReferenceDate DATE NULL,
     ReferencePeriod VARCHAR(50) NULL,
