@@ -246,7 +246,7 @@ CREATE TABLE ChangeLogs (
     DoctorId INT NOT NULL FOREIGN KEY REFERENCES Users(UserId),
     TableName VARCHAR(255) NOT NULL,
     RecordId INT NOT NULL,
-    Action VARCHAR(20) NOT NULL CHECK (Action IN ('INSERT', 'UPDATE', 'DELETE')),
+    Action VARCHAR(20) NOT NULL,
     Timestamp DATETIME NOT NULL DEFAULT GETDATE(),
     DetailsBefore NVARCHAR(MAX) NULL,
     DetailsAfter NVARCHAR(MAX) NULL

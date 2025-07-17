@@ -161,7 +161,7 @@ namespace GlucoTrack_api.Controllers
         {
             // Only active therapies (EndDate == null)
             var recentTherapiesRaw = await _context.Therapies
-                .Where(t => t.DoctorId == doctorId)
+                .Where(t => t.DoctorId == doctorId && t.EndDate == null)
                 .OrderByDescending(t => t.CreatedAt)
                 .Take(10)
                 .ToListAsync();

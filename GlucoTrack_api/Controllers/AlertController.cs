@@ -140,7 +140,7 @@ namespace GlucoTrack_api.Controllers
         [HttpPost("create-glycemia-alert")]
         public async Task<IActionResult> CreateGlycemiaAlert([FromBody] GlycemiaAlertRequest req)
         {
-            if (req == null || req.UserId <= 0 || req.Value < 40 || req.Value > 400)
+            if (req == null || req.UserId <= 0)
                 return BadRequest("Invalid data");
 
             // Determine label and recipients
@@ -153,13 +153,16 @@ namespace GlucoTrack_api.Controllers
             {
                 label = "CRITICAL_GLUCOSE";
                 if (doctorId == null) return BadRequest("No doctor found for patient");
-                recipients = new[] { doctorId.Value };
+                recipients = new[] { req.UserId, doctorId.Value };
                 msg = req.Message ?? $"Critical glycemia value: {req.Value} mg/dL at {req.DateTime:HH:mm} on {req.DateTime:dd/MM/yyyy}";
             }
             else if (req.Level == "SEVERE")
             {
                 label = "VERY_HIGH_GLUCOSE";
-                recipients = doctorId != null ? new[] { req.UserId, doctorId.Value } : new[] { req.UserId };
+                if (doctorId != null)
+                    recipients = new[] { req.UserId, doctorId.Value };
+                else
+                    recipients = new[] { req.UserId };
                 msg = req.Message ?? $"Severely high glycemia: {req.Value} mg/dL at {req.DateTime:HH:mm} on {req.DateTime:dd/MM/yyyy}";
             }
             else if (req.Level == "MILD")
