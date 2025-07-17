@@ -122,7 +122,7 @@ namespace GlucoTrack_api.Controllers
                         new Users { UserId = 4, Username = "lgiuliani", PasswordHash = "lg", FirstName = "Laura", LastName = "Giuliani", Email = "lgiuliani@email.com", RoleId = 3, BirthDate = DateOnly.Parse("1985-09-12"), Height = (decimal?)162.0, Weight = (decimal?)65.0, FiscalCode = "GLNLRA85P52H501Z", Gender = "F", CreatedAt = DateTime.Parse("2025-06-01") },
                         new Users { UserId = 5, Username = "fbruno", PasswordHash = "fb", FirstName = "Francesco", LastName = "Bruno", Email = "fbruno@email.com", RoleId = 3, BirthDate = DateOnly.Parse("1978-03-22"), Height = (decimal?)180.0, Weight = (decimal?)92.0, FiscalCode = "BRNFNC78C22H501T", Gender = "M", CreatedAt = DateTime.Parse("2025-06-01") },
                         new Users { UserId = 6, Username = "gneri", PasswordHash = "gn", FirstName = "Giulia", LastName = "Neri", Email = "gneri@email.com", RoleId = 3, BirthDate = DateOnly.Parse("1992-11-15"), Height = (decimal?)168.0, Weight = (decimal?)70.0, FiscalCode = "NERGLI92S55H501A", Gender = "F", CreatedAt = DateTime.Parse("2025-06-01") },
-                        new Users { UserId = 7, Username = "admin1", PasswordHash = "admin", FirstName = "Anna", LastName = "Bianchi", Email = "admin@email.com", RoleId = 1, CreatedAt = DateTime.Parse("2025-06-01") }
+                        new Users { UserId = 7, Username = "admin1", PasswordHash = "admin", FirstName = "Sekiro", LastName = "Pirelli", Email = "admin@email.com", RoleId = 1, CreatedAt = DateTime.Parse("2025-06-01") }
                     });
                     await _context.SaveChangesAsync();
                     await _context.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT Users OFF");
