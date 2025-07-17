@@ -61,6 +61,7 @@ namespace GlucoTrack_api.Controllers
             try
             {
                 // L'ordine è importante per rispettare le FK
+                await _context.ChangeLogs.ExecuteDeleteAsync();
                 await _context.Symptoms.ExecuteDeleteAsync();
                 await _context.MedicationIntakes.ExecuteDeleteAsync();
                 await _context.GlycemicMeasurements.ExecuteDeleteAsync();
